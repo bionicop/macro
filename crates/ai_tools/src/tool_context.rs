@@ -666,6 +666,46 @@ pub fn build_pipeline_tool_context(
     }
 }
 
+/// Campaigns over the databases service and access the database tools use,
+/// so recipient rows an agent adds reach open clients the same way.
+pub type ToolCampaignService = campaign::domain::service::CampaignServiceImpl<
+    campaign::outbound::pg_campaign_repo::PgCampaignRepo<
+        databases::outbound::pg_cell_store::PgCellStore<properties::PropertiesPgRepo>,
+    >,
+    ToolDatabasesService,
+    ToolEntityAccessService,
+    crm::outbound::lookup::PgCampaignContacts,
+>;
+
+/// Type alias for the campaign AI tool context.
+pub type ToolCampaignToolContext = campaign::inbound::toolset::CampaignToolContext<
+    ToolCampaignService,
+    ToolEntityAccessService,
+>;
+
+/// Build the campaign tools over the database tools' service and access.
+pub fn build_campaign_tool_context(
+    pool: sqlx::PgPool,
+    databases: &ToolDatabasesToolContext,
+) -> ToolCampaignToolContext {
+    campaign::inbound::toolset::CampaignToolContext {
+        service: Arc::new(campaign::domain::service::CampaignServiceImpl::new(
+            campaign::outbound::pg_campaign_repo::PgCampaignRepo::new(
+                pool.clone(),
+                databases::outbound::pg_cell_store::PgCellStore::new(
+                    pool.clone(),
+                    properties::PropertiesPgRepo::new(pool.clone()),
+                ),
+            ),
+            databases.service.clone(),
+            databases.entity_access_service.clone(),
+            crm::outbound::lookup::PgCampaignContacts::new(pool),
+        )),
+        access: databases.entity_access_service.clone(),
+        actor: databases.actor,
+    }
+}
+
 /// CRM CSV imports and exports over the pipeline workflows, the CRM's
 /// records and Macro documents.
 pub type ToolCrmTransferService = crm::domain::crm_transfer::CrmTransferServiceImpl<
@@ -2152,6 +2192,8 @@ pub struct ToolServiceContext {
     pub pipeline_tool_context: ToolPipelineToolContext,
     /// CRM CSV imports and exports.
     pub crm_transfer_tool_context: ToolCrmTransferToolContext,
+    /// Outreach campaigns: sequences, senders, recipients, launch.
+    pub campaign_tool_context: ToolCampaignToolContext,
     pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: RoutineToolContext,
     #[from_ref(skip)]
@@ -2246,6 +2288,7 @@ impl ToolServiceContext {
         self.forms_tool_context.actor = actor;
         self.pipeline_tool_context.actor = actor;
         self.crm_transfer_tool_context.actor = actor;
+        self.campaign_tool_context.actor = actor;
         self.databases_sql_tool_context = self.databases_sql_tool_context.with_actor(actor);
         self
     }

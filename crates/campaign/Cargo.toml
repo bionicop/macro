@@ -13,6 +13,8 @@ inbound = [
   "entity_access/axum",
   "entity_access/inbound",
 ]
+# Agent tools over the campaign service.
+ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 # Postgres persistence for campaigns, their sequence and recipient progress.
 postgres = ["dep:entity_access_db_utils", "dep:sqlx"]
 # Identity secrets under AWS KMS.
@@ -28,6 +30,9 @@ delivery = [
 ]
 
 [dependencies]
+ai_toolset = { path = "../ai_toolset", optional = true }
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
 aws-sdk-kms = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
@@ -49,6 +54,7 @@ models_properties = { path = "../models_properties" }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 rustls = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
