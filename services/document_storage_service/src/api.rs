@@ -411,7 +411,9 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/campaigns",
-            campaign::inbound::axum_router::router(state.campaign_state.clone()),
+            campaign::inbound::axum_router::router(state.campaign_state.clone()).merge(
+                campaign::inbound::identity_router::router(state.campaign_identity_state.clone()),
+            ),
         )
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(

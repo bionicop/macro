@@ -234,6 +234,21 @@ pub(crate) type DssCampaignService = campaign::domain::service::CampaignServiceI
     EntityAccessService,
     crm::outbound::lookup::PgCampaignContacts,
 >;
+pub(crate) type DssCampaignRepo = campaign::outbound::pg_campaign_repo::PgCampaignRepo<
+    databases::outbound::pg_cell_store::PgCellStore<PropertiesPgRepo>,
+>;
+pub(crate) type DssCampaignOutbox =
+    campaign::outbound::mail_outbox::MailOutbox<email::outbound::CampaignInbox<DssEmailService>>;
+pub(crate) type DssCampaignIdentityService = campaign::domain::identities::IdentityServiceImpl<
+    DssCampaignRepo,
+    campaign::outbound::kms::KmsSecretCipher,
+    DssCampaignOutbox,
+>;
+pub(crate) type DssCampaignIdentityState =
+    campaign::inbound::identity_router::IdentityRouterState<
+        DssCampaignIdentityService,
+        AuthorizationService,
+    >;
 pub(crate) type DssCampaignState = campaign::inbound::axum_router::CampaignRouterState<
     DssCampaignService,
     EntityAccessService,
@@ -1061,6 +1076,7 @@ pub(crate) struct ApiContext {
     pub pipeline_state: DssPipelineState,
     pub pipeline_workflow_state: DssPipelineWorkflowState,
     pub campaign_state: DssCampaignState,
+    pub campaign_identity_state: DssCampaignIdentityState,
 }
 
 env_var! {
