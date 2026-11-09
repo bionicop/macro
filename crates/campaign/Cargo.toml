@@ -15,8 +15,20 @@ inbound = [
 ]
 # Postgres persistence for campaigns, their sequence and recipient progress.
 postgres = ["dep:entity_access_db_utils", "dep:sqlx"]
+# Identity secrets under AWS KMS.
+kms = ["dep:aws-sdk-kms"]
+# SMTP and SendGrid transports and the outbox over them.
+delivery = [
+  "dep:mail-builder",
+  "dep:reqwest",
+  "dep:rustls",
+  "dep:tokio",
+  "dep:tokio-rustls",
+  "dep:webpki-roots",
+]
 
 [dependencies]
+aws-sdk-kms = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
 chrono = { workspace = true, features = ["serde"] }
@@ -30,17 +42,23 @@ hmac = { workspace = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+mail-builder = { version = "0.4.3", optional = true }
 models_databases = { path = "../models_databases" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
+reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
+rustls = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["io-util", "net", "time"] }
+tokio-rustls = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
+webpki-roots = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }

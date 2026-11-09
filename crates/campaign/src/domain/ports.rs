@@ -225,6 +225,20 @@ pub trait Outbox: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), DeliveryError>> + Send;
 }
 
+/// Sends from a connected inbox as its owner, through email's send
+/// admission, so the email is an ordinary sent message. Implemented by
+/// email.
+pub trait InboxSend: Send + Sync + 'static {
+    /// Admit one email from `link_id`. `email.send_id` is the attempt id:
+    /// replaying it returns the first outcome instead of sending again.
+    fn send(
+        &self,
+        link_id: Uuid,
+        owner: &MacroUserIdStr<'static>,
+        email: &OutboundEmail,
+    ) -> impl Future<Output = Result<Delivered, DeliveryError>> + Send;
+}
+
 /// The team's CRM contacts, read for enrollment. Implemented by CRM.
 pub trait ContactDirectory: Send + Sync + 'static {
     /// Adapter error.

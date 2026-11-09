@@ -9,5 +9,5 @@ pub mod domain;
 #[cfg(feature = "inbound")]
 pub mod inbound;
 
-#[cfg(feature = "postgres")]
+#[cfg(any(feature = "postgres", feature = "kms", feature = "delivery"))]
 pub mod outbound;

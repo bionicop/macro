@@ -18,6 +18,8 @@ all = [
   "s3",
   "sqs",
 ]
+# Campaign email from connected inboxes, through send admission.
+campaign = ["dep:campaign", "ports"]
 attachment = [
   "dep:attachment",
   "dep:non_empty",
@@ -75,6 +77,7 @@ futures = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
+campaign = { path = "../campaign", default-features = false, optional = true }
 crm = { path = "../crm", default-features = false }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }

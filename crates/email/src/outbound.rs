@@ -1,3 +1,5 @@
+#[cfg(feature = "campaign")]
+mod campaign_inbox;
 #[cfg(feature = "outbound")]
 mod email_pg_repo;
 #[cfg(feature = "http_client")]
@@ -19,6 +21,8 @@ mod shared_thread_replies;
 #[cfg(feature = "sqs")]
 mod sqs_enqueuer;
 
+#[cfg(feature = "campaign")]
+pub use campaign_inbox::CampaignInbox;
 #[cfg(feature = "outbound")]
 pub use email_pg_repo::EmailPgRepo;
 #[cfg(all(feature = "outbound", feature = "mailbox"))]
