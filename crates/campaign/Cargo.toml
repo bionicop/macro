@@ -1,0 +1,41 @@
+[package]
+edition = "2024"
+name = "campaign"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# Axum HTTP router.
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "entity_access/axum",
+  "entity_access/inbound",
+]
+# Postgres persistence for campaigns, their sequence and recipient progress.
+postgres = ["dep:entity_access_db_utils", "dep:sqlx"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+bot_id = { path = "../bot_id" }
+chrono = { workspace = true, features = ["serde"] }
+chrono-tz = { workspace = true }
+databases = { path = "../databases", default-features = false, features = ["ports"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+models_databases = { path = "../models_databases" }
+models_permissions = { path = "../models_permissions" }
+models_properties = { path = "../models_properties" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

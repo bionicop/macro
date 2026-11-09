@@ -30,6 +30,7 @@ members = [
   "crates/broadcast",
   "crates/calendar_events",
   "crates/calendar_scheduling",
+  "crates/campaign",
   "crates/channel_bots",
   "crates/channel_labels",
   "crates/client/cache-core",
