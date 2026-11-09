@@ -893,8 +893,8 @@ where
                 sqlx::query!(
                     "UPDATE campaign_recipients
                      SET send_attempts = send_attempts + 1,
-                         state = CASE WHEN send_attempts + 1 >= $5 THEN 'failed' ELSE state END,
-                         next_send_at = CASE WHEN send_attempts + 1 >= $5 THEN NULL ELSE $4 END,
+                         state = CASE WHEN send_attempts + 1 >= $5::smallint THEN 'failed' ELSE state END,
+                         next_send_at = CASE WHEN send_attempts + 1 >= $5::smallint THEN NULL ELSE $4::timestamptz END,
                          updated_at = now()
                      WHERE campaign_id = $1 AND row_id = $2 AND state = 'active' AND next_position = $3",
                     id,
