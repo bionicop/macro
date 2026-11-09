@@ -236,6 +236,22 @@ pub struct Config {
     pub call_recording_s3_access_key: CallRecordingS3AccessKey,
     pub call_recording_s3_secret: CallRecordingS3Secret,
     pub meta_test_event_code: MetaTestEventCode,
+
+    /// Runs the campaign sender in this process. Off by default; sending is
+    /// safe on several replicas, which lease recipients from each other.
+    #[macro_config_default(false)]
+    pub campaign_sender_enabled: bool,
+    /// KMS key for SMTP passwords and SendGrid keys. Empty: identities can
+    /// be listed and removed but not added, and are not sent from.
+    #[macro_config_default(String::new())]
+    pub campaign_identity_kms_key_id: String,
+    /// Public origin of this service, for unsubscribe links and the open
+    /// pixel. Empty, or a short secret, sends without them.
+    #[macro_config_default(String::new())]
+    pub campaign_public_base_url: String,
+    /// At least 32 bytes; signs unsubscribe and open links.
+    #[macro_config_default(String::new())]
+    pub campaign_link_secret: String,
 }
 
 impl Config {
