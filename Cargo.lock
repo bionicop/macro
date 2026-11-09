@@ -1189,6 +1189,7 @@ dependencies = [
  "calendar_events",
  "calendar_scheduling",
  "call",
+ "campaign",
  "channels",
  "chat",
  "chrono",
@@ -4073,6 +4074,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "campaign"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "aws-sdk-kms",
+ "axum",
+ "base64 0.22.1",
+ "bot_id",
+ "chrono",
+ "chrono-tz",
+ "databases",
+ "email_utils",
+ "entity_access",
+ "entity_access_db_utils",
+ "hmac 0.12.1",
+ "macro_authorization",
+ "macro_user_id",
+ "macro_uuid",
+ "mail-builder",
+ "models_databases",
+ "models_permissions",
+ "models_properties",
+ "reqwest 0.13.4",
+ "rootcause",
+ "rustls",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "webpki-roots 1.0.10",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5434,6 +5479,7 @@ dependencies = [
  "axum",
  "bot_id",
  "call",
+ "campaign",
  "chrono",
  "csv",
  "databases",
@@ -6596,6 +6642,7 @@ dependencies = [
  "attention_feed",
  "authentication_service_client",
  "aws-sdk-dynamodb",
+ "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sns",
@@ -6609,6 +6656,7 @@ dependencies = [
  "cal",
  "calendar_events",
  "call",
+ "campaign",
  "channel_bots",
  "channel_labels",
  "channels",
@@ -7289,6 +7337,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "calendar_events",
+ "campaign",
  "chrono",
  "chrono-tz",
  "crm",
