@@ -1,7 +1,7 @@
 //! Thin HTTP adapters, shaped exactly like CRM pipeline routes.
 
 use crate::domain::models::{
-    AccessibleCampaign, CampaignError, CampaignSettings, CampaignSharing, CampaignStats,
+    AccessibleCampaign, CampaignError, DeliveryError, CampaignSettings, CampaignSharing, CampaignStats,
     CreateCampaign, LaunchCampaign, LaunchOutcome, Recipients, Sender, Step, StepInput,
 };
 use crate::domain::service::CampaignService;
@@ -667,6 +667,14 @@ impl IntoResponse for CampaignError {
                 };
                 message(status, error.to_string())
             }
+            Self::Delivery(error) => {
+                let status = match error {
+                    DeliveryError::Rejected(_) => StatusCode::BAD_REQUEST,
+                    DeliveryError::Transient(_) | DeliveryError::Uncertain(_) => StatusCode::BAD_GATEWAY,
+                };
+                message(status, error.to_string())
+            }
+            Self::Unavailable(text) => message(StatusCode::SERVICE_UNAVAILABLE, text.into()),
             error => {
                 tracing::error!(error = ?error, "campaign request failed");
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()

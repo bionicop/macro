@@ -4,8 +4,9 @@
 use super::models::CampaignError;
 use std::collections::HashMap;
 
-/// Built-in fields every recipient has.
-pub const BUILT_IN: [&str; 3] = ["email", "name", "first name"];
+/// Built-in fields every recipient has. The sender fills `unsubscribe link`
+/// with the recipient's one-click unsubscribe URL.
+pub const BUILT_IN: [&str; 4] = ["email", "name", "first name", "unsubscribe link"];
 
 /// Field values for one recipient, keyed by normalized name.
 #[derive(Debug, Clone, Default)]
@@ -15,6 +16,11 @@ impl MergeFields {
     /// Set a field; a later value for the same name wins.
     pub fn insert(&mut self, name: &str, value: impl Into<String>) {
         self.0.insert(normalize(name), value.into());
+    }
+
+    /// Take every field of `other`, replacing same-named ones.
+    pub fn merge(&mut self, other: MergeFields) {
+        self.0.extend(other.0);
     }
 
     /// The built-in fields of a recipient.

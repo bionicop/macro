@@ -188,13 +188,13 @@ pub trait CampaignService: Send + Sync + 'static {
 
 /// Campaign policy, composed with the database, access and CRM services.
 pub struct CampaignServiceImpl<Repo, Databases, Access, Contacts> {
-    repo: Repo,
-    databases: Arc<Databases>,
+    pub(super) repo: Repo,
+    pub(super) databases: Arc<Databases>,
     access: Arc<Access>,
     contacts: Contacts,
 }
 
-fn storage(error: impl std::error::Error + Send + Sync + 'static) -> CampaignError {
+pub(super) fn storage(error: impl std::error::Error + Send + Sync + 'static) -> CampaignError {
     CampaignError::Storage(rootcause::Report::new(error).into_dynamic())
 }
 
@@ -503,7 +503,7 @@ where
     A: EntityAccessService + AccessibleCampaigns,
     C: ContactDirectory,
 {
-    async fn recipient_table(&self, campaign: &Campaign) -> Result<TableDetail, CampaignError> {
+    pub(super) async fn recipient_table(&self, campaign: &Campaign) -> Result<TableDetail, CampaignError> {
         self.databases
             .storage_tables(campaign.database_id)
             .await?

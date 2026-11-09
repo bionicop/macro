@@ -638,6 +638,9 @@ pub struct DueRecipient {
     pub first: Option<FirstSend>,
 }
 
+/// Transient failures of one step before the recipient's sequence fails.
+pub const MAX_SEND_ATTEMPTS: u16 = 5;
+
 /// Status of one reserved email.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -840,6 +843,12 @@ pub enum CampaignError {
     /// Database operation failure.
     #[error(transparent)]
     Database(#[from] databases::domain::models::DatabaseError),
+    /// A mail provider refused or failed a check.
+    #[error(transparent)]
+    Delivery(#[from] DeliveryError),
+    /// A capability this deployment has not configured.
+    #[error("{0}")]
+    Unavailable(&'static str),
     /// Persistence failure.
     #[error("Campaign storage failed: {0}")]
     Storage(rootcause::Report),

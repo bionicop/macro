@@ -68,8 +68,7 @@ fn mailbox_columns(mailbox: SenderMailbox) -> (Option<Uuid>, Option<Uuid>) {
     }
 }
 
-/// Transient failures of one step before the recipient's sequence fails.
-const MAX_SEND_ATTEMPTS: i16 = 5;
+const MAX_SEND_ATTEMPTS: i16 = crate::domain::models::MAX_SEND_ATTEMPTS as i16;
 
 async fn mark_send(
     tx: &mut Transaction<'static, Postgres>,
