@@ -388,7 +388,7 @@ where
         let mut html = template::render(&step.body_html, &fields, true)?;
         let text = match &step.body_text {
             Some(text) if !text.trim().is_empty() => template::render(text, &fields, false)?,
-            _ => email_utils::html_to_plaintext(&html).unwrap_or_default(),
+            _ => email_utils::body_parsed::html_to_plaintext(&html).unwrap_or_default(),
         };
         if batch.campaign.settings.track_opens
             && let Some(links) = &self.links

@@ -508,9 +508,14 @@ pub struct SendingIdentity {
 }
 
 /// A password or API key as typed. Redacts its `Debug` and zeroizes on drop.
-#[derive(Clone, Deserialize)]
-#[serde(transparent)]
+#[derive(Clone)]
 pub struct Secret(zeroize::Zeroizing<String>);
+
+impl<'de> Deserialize<'de> for Secret {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(Self::new)
+    }
+}
 
 impl Secret {
     /// Wrap plaintext.
