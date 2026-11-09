@@ -162,6 +162,25 @@ pub trait SenderRepo: CampaignRepo {
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
     /// Complete an active campaign with no active recipients left.
     fn complete_if_done(&self, id: Uuid) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+    /// Mark sends since `since` answered by their recipient in any of the
+    /// campaign owner's connected inboxes, and stop those recipients when
+    /// the campaign stops on reply. Returns the sends marked.
+    fn detect_replies(
+        &self,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u64, Self::Error>> + Send;
+    /// Mark sends since `since` that a mail server bounced, stop their
+    /// recipients and suppress the address for the team. Returns the sends
+    /// marked.
+    fn detect_bounces(
+        &self,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u64, Self::Error>> + Send;
+    /// Stop mailing the send's recipient and suppress the address for the
+    /// campaign's team; false when the send does not exist.
+    fn unsubscribe(&self, send_id: Uuid) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+    /// Count an open of a sent email, when its campaign tracks opens.
+    fn record_open(&self, send_id: Uuid) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 /// Storage of SMTP and SendGrid identities.

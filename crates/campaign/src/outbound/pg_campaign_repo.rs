@@ -937,4 +937,115 @@ where
         .rows_affected()
             == 1)
     }
+
+    async fn detect_replies(&self, since: DateTime<Utc>) -> Result<u64, Self::Error> {
+        // Any inbound message from the recipient's address after the send,
+        // in any inbox the campaign's owner connected, is a reply.
+        let marked = sqlx::query_scalar!(
+            r#"WITH replied AS (
+                   SELECT DISTINCT s.id
+                   FROM campaign_sends s
+                   JOIN campaign_entities c ON c.id = s.campaign_id
+                   JOIN email_links l ON l.macro_id = c.user_id AND l.deleting_at IS NULL
+                   JOIN email_contacts ec ON ec.link_id = l.id AND lower(ec.email_address) = lower(s.recipient_email)
+                   JOIN email_messages m ON m.from_contact_id = ec.id
+                   WHERE s.status = 'sent' AND s.replied_at IS NULL AND s.sent_at > $1
+                     AND NOT m.is_sent AND NOT m.is_draft AND m.internal_date_ts > s.sent_at
+               ), marked AS (
+                   UPDATE campaign_sends s SET replied_at = now()
+                   FROM replied r WHERE s.id = r.id
+                   RETURNING s.campaign_id, s.row_id
+               ), stopped AS (
+                   UPDATE campaign_recipients r SET state = 'replied', next_send_at = NULL, updated_at = now()
+                   FROM marked m JOIN campaign_entities c ON c.id = m.campaign_id
+                   WHERE r.campaign_id = m.campaign_id AND r.row_id = m.row_id
+                     AND r.state = 'active' AND c.stop_on_reply
+                   RETURNING 1
+               )
+               SELECT count(*) AS "marked!" FROM marked"#,
+            since
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(marked as u64)
+    }
+
+    async fn detect_bounces(&self, since: DateTime<Utc>) -> Result<u64, Self::Error> {
+        // A delivery report from a mail server: in the sent message's thread
+        // for inbox sends, or quoting the Message-ID for identity sends.
+        let marked = sqlx::query_scalar!(
+            r#"WITH bounced AS (
+                   SELECT DISTINCT s.id
+                   FROM campaign_sends s
+                   JOIN campaign_entities c ON c.id = s.campaign_id
+                   JOIN email_links l ON l.macro_id = c.user_id AND l.deleting_at IS NULL
+                   JOIN email_messages m ON m.link_id = l.id AND NOT m.is_sent AND NOT m.is_draft
+                     AND m.internal_date_ts > s.sent_at
+                   JOIN email_contacts ec ON ec.id = m.from_contact_id
+                     AND (lower(ec.email_address) LIKE 'mailer-daemon@%' OR lower(ec.email_address) LIKE 'postmaster@%')
+                   LEFT JOIN email_messages sent ON sent.id = s.email_message_id
+                   WHERE s.status = 'sent' AND s.bounced_at IS NULL AND s.sent_at > $1
+                     AND (m.thread_id = sent.thread_id
+                       OR (s.rfc_message_id IS NOT NULL
+                           AND strpos(m.body_text, trim(both '<>' from s.rfc_message_id)) > 0))
+               ), marked AS (
+                   UPDATE campaign_sends s SET bounced_at = now()
+                   FROM bounced b WHERE s.id = b.id
+                   RETURNING s.campaign_id, s.row_id, s.recipient_email
+               ), stopped AS (
+                   UPDATE campaign_recipients r SET state = 'bounced', next_send_at = NULL, updated_at = now()
+                   FROM marked m
+                   WHERE r.campaign_id = m.campaign_id AND r.row_id = m.row_id AND r.state = 'active'
+                   RETURNING 1
+               ), suppressed AS (
+                   INSERT INTO campaign_suppressions (team_id, email, reason, campaign_id)
+                   SELECT DISTINCT ON (c.team_id, lower(m.recipient_email)) c.team_id, lower(m.recipient_email), 'bounced', m.campaign_id
+                   FROM marked m JOIN campaign_entities c ON c.id = m.campaign_id
+                   ON CONFLICT DO NOTHING
+                   RETURNING 1
+               )
+               SELECT count(*) AS "marked!" FROM marked"#,
+            since
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(marked as u64)
+    }
+
+    async fn unsubscribe(&self, send_id: Uuid) -> Result<bool, Self::Error> {
+        // Suppressed for the whole team, so no later campaign enrolls them.
+        Ok(sqlx::query_scalar!(
+            r#"WITH send AS (
+                   SELECT s.campaign_id, s.row_id, lower(s.recipient_email) AS email, c.team_id
+                   FROM campaign_sends s JOIN campaign_entities c ON c.id = s.campaign_id
+                   WHERE s.id = $1
+               ), stopped AS (
+                   UPDATE campaign_recipients r SET state = 'unsubscribed', next_send_at = NULL, updated_at = now()
+                   FROM send WHERE r.campaign_id = send.campaign_id AND r.row_id = send.row_id
+                     AND r.state IN ('active', 'completed', 'replied')
+                   RETURNING 1
+               ), suppressed AS (
+                   INSERT INTO campaign_suppressions (team_id, email, reason, campaign_id)
+                   SELECT team_id, email, 'unsubscribed', campaign_id FROM send
+                   ON CONFLICT DO NOTHING
+                   RETURNING 1
+               )
+               SELECT EXISTS (SELECT 1 FROM send) AS "found!""#,
+            send_id
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    async fn record_open(&self, send_id: Uuid) -> Result<(), Self::Error> {
+        sqlx::query!(
+            "UPDATE campaign_sends s SET opened_at = coalesce(s.opened_at, now()), open_count = s.open_count + 1
+             FROM campaign_entities c
+             WHERE s.id = $1 AND c.id = s.campaign_id AND s.status = 'sent' AND c.track_opens",
+            send_id
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }

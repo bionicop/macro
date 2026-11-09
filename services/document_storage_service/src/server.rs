@@ -1744,11 +1744,22 @@ async fn run_server() -> anyhow::Result<()> {
             Arc::new(email_service.clone()),
         )),
     ));
+    let campaign_links = campaign::domain::links::SignedLinks::new(
+        &config.campaign_public_base_url,
+        &config.campaign_link_secret,
+    );
+    let campaign_public_state = campaign::inbound::public_router::PublicRouterState {
+        repo: Arc::new(campaign::outbound::pg_campaign_repo::PgCampaignRepo::new(
+            db.clone(),
+            databases::outbound::pg_cell_store::PgCellStore::new(
+                db.clone(),
+                properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
+            ),
+        )),
+        links: campaign_links.clone(),
+    };
     if config.campaign_sender_enabled {
-        let links = campaign::domain::links::SignedLinks::new(
-            &config.campaign_public_base_url,
-            &config.campaign_link_secret,
-        );
+        let links = campaign_links;
         if links.is_none() {
             tracing::warn!("campaign email will carry no unsubscribe link or open pixel");
         }
@@ -2675,6 +2686,7 @@ async fn run_server() -> anyhow::Result<()> {
             service: campaign_identities,
             authorization: authorization_state.clone(),
         },
+        campaign_public_state,
         crm_state: crm::inbound::axum_router::CrmRouterState {
             service: Arc::new(crm_service),
             stage_service: Arc::new(crm::domain::stages::CrmStageServiceImpl::new(

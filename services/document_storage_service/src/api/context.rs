@@ -249,6 +249,8 @@ pub(crate) type DssCampaignIdentityState =
         DssCampaignIdentityService,
         AuthorizationService,
     >;
+pub(crate) type DssCampaignPublicState =
+    campaign::inbound::public_router::PublicRouterState<DssCampaignRepo>;
 pub(crate) type DssCampaignState = campaign::inbound::axum_router::CampaignRouterState<
     DssCampaignService,
     EntityAccessService,
@@ -1077,6 +1079,7 @@ pub(crate) struct ApiContext {
     pub pipeline_workflow_state: DssPipelineWorkflowState,
     pub campaign_state: DssCampaignState,
     pub campaign_identity_state: DssCampaignIdentityState,
+    pub campaign_public_state: DssCampaignPublicState,
 }
 
 env_var! {

@@ -176,9 +176,18 @@ where
         &self.campaigns.repo
     }
 
-    /// Enroll rows added to active campaigns and complete finished ones.
+    /// Record replies and bounces, enroll rows added to active campaigns and
+    /// complete finished ones.
     #[tracing::instrument(skip(self), err)]
     pub async fn maintain(&self) -> Result<(), CampaignError> {
+        // Replies and bounces arrive days after a send; follow-ups wait
+        // longer still, so a month covers every sequence that is running.
+        let since = Utc::now() - Duration::days(30);
+        let replied = self.repo().detect_replies(since).await.map_err(storage)?;
+        let bounced = self.repo().detect_bounces(since).await.map_err(storage)?;
+        if replied + bounced > 0 {
+            tracing::info!(replied, bounced, "campaign responses recorded");
+        }
         let ids = self
             .repo()
             .active_campaigns()
