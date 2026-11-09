@@ -149,6 +149,19 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 )
                 .await?)
             }
+            EntityType::Campaign => {
+                let campaign_id = parse_uuid(entity_id, "Invalid campaign ID format")?;
+                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+                    .await
+                    .map_err(anyhow_access_error)?;
+                Ok(queries::list_entity_access_grants(
+                    &self.pool,
+                    &campaign_id,
+                    EntityType::Campaign,
+                    &source_ids,
+                )
+                .await?)
+            }
             EntityType::ExternalChat => {
                 let id = parse_uuid(entity_id, "Invalid group ID")?;
                 let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
