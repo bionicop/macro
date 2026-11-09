@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.link_id, s.identity_id, s.daily_cap,\n                      coalesce(l.macro_id, i.user_id) AS owner,\n                      (SELECT count(*) FROM campaign_sends se\n                        WHERE se.campaign_id = s.campaign_id AND se.reserved_at >= $2\n                          AND se.status <> 'failed'\n                          AND (se.link_id = s.link_id OR se.identity_id = s.identity_id)) AS \"sent_today!\"\n               FROM campaign_senders s\n               LEFT JOIN email_links l ON l.id = s.link_id AND l.deleting_at IS NULL\n               LEFT JOIN campaign_sending_identities i ON i.id = s.identity_id\n               WHERE s.campaign_id = $1\n               ORDER BY s.position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "identity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "daily_cap",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sent_today!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "1f927178471fcf9aa68340eedf69e11fed94e6247f1ae359f3ce624b5fd55f87"
+}

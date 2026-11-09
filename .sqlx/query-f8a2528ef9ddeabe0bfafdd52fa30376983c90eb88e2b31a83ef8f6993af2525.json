@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_recipients\n                     SET next_position = $4, next_send_at = $5, send_attempts = 0,\n                         state = CASE WHEN $5::timestamptz IS NULL THEN 'completed' ELSE state END,\n                         updated_at = now()\n                     WHERE campaign_id = $1 AND row_id = $2 AND state = 'active' AND next_position = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int2",
+        "Int2",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f8a2528ef9ddeabe0bfafdd52fa30376983c90eb88e2b31a83ef8f6993af2525"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH replied AS (\n                   SELECT DISTINCT s.id\n                   FROM campaign_sends s\n                   JOIN campaign_entities c ON c.id = s.campaign_id\n                   JOIN email_links l ON l.macro_id = c.user_id AND l.deleting_at IS NULL\n                   JOIN email_contacts ec ON ec.link_id = l.id AND lower(ec.email_address) = lower(s.recipient_email)\n                   JOIN email_messages m ON m.from_contact_id = ec.id\n                   WHERE s.status = 'sent' AND s.replied_at IS NULL AND s.sent_at > $1\n                     AND NOT m.is_sent AND NOT m.is_draft AND m.internal_date_ts > s.sent_at\n               ), marked AS (\n                   UPDATE campaign_sends s SET replied_at = now()\n                   FROM replied r WHERE s.id = r.id\n                   RETURNING s.campaign_id, s.row_id\n               ), stopped AS (\n                   UPDATE campaign_recipients r SET state = 'replied', next_send_at = NULL, updated_at = now()\n                   FROM marked m JOIN campaign_entities c ON c.id = m.campaign_id\n                   WHERE r.campaign_id = m.campaign_id AND r.row_id = m.row_id\n                     AND r.state = 'active' AND c.stop_on_reply\n                   RETURNING 1\n               )\n               SELECT count(*) AS \"marked!\" FROM marked",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "marked!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a42e154fe22676ede336022f48e8dedf93048ef711bd851636ee05b75e172f54"
+}

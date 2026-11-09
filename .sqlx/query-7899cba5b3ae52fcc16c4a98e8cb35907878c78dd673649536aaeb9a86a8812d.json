@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_sends SET status = 'sent', error = NULL, sent_at = now(),\n                             email_message_id = coalesce($2, email_message_id),\n                             rfc_message_id = coalesce($3, rfc_message_id)\n                         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7899cba5b3ae52fcc16c4a98e8cb35907878c78dd673649536aaeb9a86a8812d"
+}

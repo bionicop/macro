@@ -1,0 +1,130 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.team_id, c.database_id, c.table_id, c.primary_column_id,\n                      c.name, c.user_id, c.status, c.time_zone, c.time_zone_column_id,\n                      c.window_start_minute, c.window_end_minute, c.send_days,\n                      c.stop_on_reply, c.track_opens, c.launched_at, c.created_at, c.trashed_at,\n                      EXISTS (SELECT 1 FROM entity_access ea WHERE ea.entity_id = c.id\n                        AND ea.entity_type = 'campaign' AND ea.source_type = 'team'\n                        AND ea.source_id = c.team_id::text) AS \"team_shared!\"\n               FROM campaign_entities c\n               WHERE c.id = ANY($1) ORDER BY c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "primary_column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "time_zone_column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "window_start_minute",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 11,
+        "name": "window_end_minute",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 12,
+        "name": "send_days",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 13,
+        "name": "stop_on_reply",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "track_opens",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "launched_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "trashed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "team_shared!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "770addaa9ea176403a1d1ad048de97810ba512419e37da64c25735d0b873460e"
+}

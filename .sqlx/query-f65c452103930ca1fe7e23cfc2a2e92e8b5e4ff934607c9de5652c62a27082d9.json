@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO campaign_recipients (campaign_id, row_id, contact_id, email, name, time_zone, next_send_at)\n               SELECT DISTINCT ON (r.email) $1, r.row_id, r.contact_id, r.email, r.name, r.time_zone, r.next_send_at\n               FROM unnest($3::uuid[], $4::uuid[], $5::text[], $6::text[], $7::text[], $8::timestamptz[])\n                 AS r(row_id, contact_id, email, name, time_zone, next_send_at)\n               WHERE NOT EXISTS (SELECT 1 FROM campaign_suppressions s WHERE s.team_id = $2 AND s.email = r.email)\n                 AND NOT EXISTS (SELECT 1 FROM campaign_recipients e WHERE e.campaign_id = $1 AND e.email = r.email)\n               ORDER BY r.email, r.row_id\n               ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f65c452103930ca1fe7e23cfc2a2e92e8b5e4ff934607c9de5652c62a27082d9"
+}

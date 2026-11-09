@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH due AS (\n                   SELECT r.campaign_id, r.row_id\n                   FROM campaign_recipients r\n                   JOIN campaign_entities c ON c.id = r.campaign_id\n                   WHERE r.state = 'active' AND r.next_send_at <= $1\n                     AND c.status = 'active' AND c.trashed_at IS NULL\n                   ORDER BY r.next_send_at\n                   LIMIT $3\n                   FOR UPDATE OF r SKIP LOCKED\n               ), leased AS (\n                   UPDATE campaign_recipients r SET next_send_at = $2, updated_at = now()\n                   FROM due WHERE r.campaign_id = due.campaign_id AND r.row_id = due.row_id\n                   RETURNING r.campaign_id, r.row_id, r.email, r.name, r.time_zone,\n                             r.next_position, r.send_attempts\n               )\n               SELECT l.campaign_id AS \"campaign_id!\", l.row_id AS \"row_id!\", l.email AS \"email!\",\n                      l.name, l.time_zone, l.next_position AS \"next_position!\",\n                      l.send_attempts AS \"send_attempts!\",\n                      f.id AS \"first_id?\", f.link_id AS \"first_link_id?\",\n                      f.identity_id AS \"first_identity_id?\",\n                      f.email_message_id AS \"first_email_message_id?\",\n                      f.rfc_message_id AS \"first_rfc_message_id?\", f.subject AS \"first_subject?\"\n               FROM leased l\n               LEFT JOIN LATERAL (\n                   SELECT se.id, se.link_id, se.identity_id, se.email_message_id,\n                          se.rfc_message_id, se.subject\n                   FROM campaign_sends se JOIN campaign_steps st ON st.id = se.step_id\n                   WHERE se.campaign_id = l.campaign_id AND se.recipient_email = l.email\n                     AND se.status = 'sent'\n                   ORDER BY st.position LIMIT 1\n               ) f ON true",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "campaign_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "row_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "next_position!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "send_attempts!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 7,
+        "name": "first_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "first_link_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "first_identity_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "first_email_message_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "first_rfc_message_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "first_subject?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "b3bfd970470b74c1a36602be20f65af61b8a39086fd53fa5b5154cfeccd75904"
+}

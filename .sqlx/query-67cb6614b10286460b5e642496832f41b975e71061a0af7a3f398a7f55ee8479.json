@@ -1,0 +1,106 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, transport, from_email, from_name, smtp_host, smtp_port, imap_host,\n                    imap_port, username, secret_ciphertext, encryption_version, kms_key_id,\n                    verified_at, created_at\n             FROM campaign_sending_identities WHERE user_id = $1 ORDER BY created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "transport",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "from_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "from_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "smtp_host",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "smtp_port",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "imap_host",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "imap_port",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "secret_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 11,
+        "name": "encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 12,
+        "name": "kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "67cb6614b10286460b5e642496832f41b975e71061a0af7a3f398a7f55ee8479"
+}

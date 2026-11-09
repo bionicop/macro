@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_entities SET trashed_at = CASE WHEN $2 THEN now() ELSE NULL END, status = CASE WHEN $2 AND status = 'active' THEN 'paused' ELSE status END, updated_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0466171d77a5cac8d3d258b358c3a446b5f5ce6fbdf2eee25a2ad470c78fd8b5"
+}

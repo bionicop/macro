@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_entities SET status = $3,\n                 launched_at = CASE WHEN $3 = 'active' THEN coalesce(launched_at, now()) ELSE launched_at END,\n                 launch_confirmation = CASE WHEN $3 = 'active' THEN $4 ELSE launch_confirmation END,\n                 updated_at = now()\n             WHERE id = $1 AND trashed_at IS NULL AND status = ANY($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "820a838d3bddbe79173e118b4c38dada8fa26155b005581b79c9665a37f6f4e3"
+}

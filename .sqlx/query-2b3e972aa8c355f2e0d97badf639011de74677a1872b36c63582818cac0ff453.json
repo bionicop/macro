@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                 SELECT 1 FROM campaign_sends WHERE step_id IN (\n                   SELECT id FROM campaign_steps WHERE id = ANY($1) FOR UPDATE)\n               ) AS \"sent!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sent!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2b3e972aa8c355f2e0d97badf639011de74677a1872b36c63582818cac0ff453"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_sends s SET opened_at = coalesce(s.opened_at, now()), open_count = s.open_count + 1\n             FROM campaign_entities c\n             WHERE s.id = $1 AND c.id = s.campaign_id AND s.status = 'sent' AND c.track_opens",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68bae3550e66c3be9c957ae3bbeb3370dfa6af1d1e2bdbf26aad541fbff28491"
+}
