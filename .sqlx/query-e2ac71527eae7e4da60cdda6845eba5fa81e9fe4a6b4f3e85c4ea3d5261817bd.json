@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT access_level::text FROM entity_access WHERE entity_id = $1 AND entity_type = 'campaign' AND source_id = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e2ac71527eae7e4da60cdda6845eba5fa81e9fe4a6b4f3e85c4ea3d5261817bd"
+}

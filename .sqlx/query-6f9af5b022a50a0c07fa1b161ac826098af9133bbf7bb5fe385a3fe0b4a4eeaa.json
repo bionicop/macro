@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT row_id, contact_id, email, name, time_zone, state, next_position, next_send_at, enrolled_at\n             FROM campaign_recipients\n             WHERE campaign_id = $1 AND ($2::uuid IS NULL OR row_id > $2)\n             ORDER BY row_id LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "row_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contact_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "next_position",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 7,
+        "name": "next_send_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "enrolled_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "6f9af5b022a50a0c07fa1b161ac826098af9133bbf7bb5fe385a3fe0b4a4eeaa"
+}

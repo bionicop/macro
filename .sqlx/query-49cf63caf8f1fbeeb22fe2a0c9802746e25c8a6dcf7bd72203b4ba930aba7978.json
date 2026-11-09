@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, position, delay_minutes, subject, body_html, body_text, body_macro FROM campaign_steps WHERE campaign_id = $1 ORDER BY position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "position",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 2,
+        "name": "delay_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "body_html",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "body_macro",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "49cf63caf8f1fbeeb22fe2a0c9802746e25c8a6dcf7bd72203b4ba930aba7978"
+}

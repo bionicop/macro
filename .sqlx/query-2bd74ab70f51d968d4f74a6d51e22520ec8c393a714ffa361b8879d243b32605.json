@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM campaign_sends WHERE id = $1 AND status = 'reserved'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2bd74ab70f51d968d4f74a6d51e22520ec8c393a714ffa361b8879d243b32605"
+}

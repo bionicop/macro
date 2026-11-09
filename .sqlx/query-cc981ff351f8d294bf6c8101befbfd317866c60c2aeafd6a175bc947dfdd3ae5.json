@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_entities SET time_zone = $2, time_zone_column_id = $3, window_start_minute = $4, window_end_minute = $5, send_days = $6, stop_on_reply = $7, track_opens = $8, updated_at = now() WHERE id = $1 AND trashed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int2",
+        "Int2",
+        "Int2",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc981ff351f8d294bf6c8101befbfd317866c60c2aeafd6a175bc947dfdd3ae5"
+}

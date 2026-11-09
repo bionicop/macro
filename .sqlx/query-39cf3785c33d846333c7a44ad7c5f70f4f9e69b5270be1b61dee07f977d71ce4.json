@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, status, link_id, identity_id, rfc_message_id FROM campaign_sends\n             WHERE campaign_id = $1 AND step_id = $2 AND recipient_email = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "identity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "rfc_message_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "39cf3785c33d846333c7a44ad7c5f70f4f9e69b5270be1b61dee07f977d71ce4"
+}

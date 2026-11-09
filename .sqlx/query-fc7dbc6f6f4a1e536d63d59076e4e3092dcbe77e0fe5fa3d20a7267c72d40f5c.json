@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_entities SET status = 'completed', updated_at = now()\n             WHERE id = $1 AND status = 'active' AND trashed_at IS NULL\n               AND EXISTS (SELECT 1 FROM campaign_recipients WHERE campaign_id = $1)\n               AND NOT EXISTS (SELECT 1 FROM campaign_recipients WHERE campaign_id = $1 AND state = 'active')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fc7dbc6f6f4a1e536d63d59076e4e3092dcbe77e0fe5fa3d20a7267c72d40f5c"
+}

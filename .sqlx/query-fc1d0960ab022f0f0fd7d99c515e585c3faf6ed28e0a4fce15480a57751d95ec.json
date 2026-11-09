@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT count(*) FROM email_links\n                        WHERE id = ANY($2) AND macro_id = $1 AND deleting_at IS NULL)\n                    + (SELECT count(*) FROM campaign_sending_identities\n                        WHERE id = ANY($3) AND user_id = $1) AS \"owned!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owned!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fc1d0960ab022f0f0fd7d99c515e585c3faf6ed28e0a4fce15480a57751d95ec"
+}
