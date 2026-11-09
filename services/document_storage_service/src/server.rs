@@ -1704,6 +1704,18 @@ async fn run_server() -> anyhow::Result<()> {
             properties_service.clone(),
         ),
     ));
+    let campaign_service = Arc::new(campaign::domain::service::CampaignServiceImpl::new(
+        campaign::outbound::pg_campaign_repo::PgCampaignRepo::new(
+            db.clone(),
+            databases::outbound::pg_cell_store::PgCellStore::new(
+                db.clone(),
+                properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
+            ),
+        ),
+        databases_service.clone(),
+        entity_access_service.clone(),
+        crm::outbound::lookup::PgCampaignContacts::new(db.clone()),
+    ));
 
     let database_webhooks_service = Arc::new(database_webhooks::wiring::build_service(
         db.clone(),
@@ -2563,6 +2575,11 @@ async fn run_server() -> anyhow::Result<()> {
         entity_access_management_service,
         pipeline_state: crm::inbound::pipelines::PipelineRouterState {
             service: pipeline_service,
+            access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
+        campaign_state: campaign::inbound::axum_router::CampaignRouterState {
+            service: campaign_service,
             access: entity_access_service.clone(),
             authorization: authorization_state.clone(),
         },
