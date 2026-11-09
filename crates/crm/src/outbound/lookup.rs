@@ -97,3 +97,54 @@ impl CrmParentReader for PgCrmParentReader {
         })
     }
 }
+
+/// PostgreSQL-backed contact directory for campaign enrollment.
+#[cfg(feature = "campaign")]
+#[derive(Clone)]
+pub struct PgCampaignContacts {
+    pool: PgPool,
+}
+
+#[cfg(feature = "campaign")]
+impl PgCampaignContacts {
+    /// Create a directory over the shared MacroDB pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+#[cfg(feature = "campaign")]
+impl campaign::domain::ports::ContactDirectory for PgCampaignContacts {
+    type Error = sqlx::Error;
+
+    async fn contact_addresses(
+        &self,
+        team_id: Uuid,
+        contacts: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, campaign::domain::models::ContactAddress>, Self::Error>
+    {
+        Ok(sqlx::query!(
+            r#"
+            SELECT ct.id, ct.email AS "email!", NULLIF(ct.name, '') AS name
+            FROM crm_contacts ct
+            WHERE ct.id = ANY($2) AND ct.team_id = $1 AND NOT ct.hidden
+              AND ct.email IS NOT NULL AND ct.email <> ''
+            "#,
+            team_id,
+            contacts,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            (
+                row.id,
+                campaign::domain::models::ContactAddress {
+                    email: row.email,
+                    name: row.name,
+                },
+            )
+        })
+        .collect())
+    }
+}
