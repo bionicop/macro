@@ -2,9 +2,12 @@
 
 use super::models::{
     Campaign, CampaignBlueprint, CampaignSettings, CampaignSharing, CampaignStats,
-    CampaignStatus, ContactAddress, Enrollment, Recipient, Sender, SendersOutcome, Step,
-    StepInput, StepsOutcome,
+    CampaignStatus, ContactAddress, Delivered, DeliveryError, DueRecipient, EncryptedSecret,
+    Enrollment, IdentityCredentials, Mailbox, OutboundEmail, Recipient, RecipientUpdate,
+    Reservation, Reserved, Secret, SendRecord, Sender, SenderUsage, SendersOutcome, Step,
+    StepInput, StepsOutcome, StoredIdentity,
 };
+use chrono::{DateTime, Utc};
 use databases::domain::models::RowId;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::channel_share_permission::{
@@ -119,6 +122,107 @@ pub trait CampaignRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<u64, Self::Error>> + Send;
     /// Recipient and send counts.
     fn stats(&self, id: Uuid) -> impl Future<Output = Result<CampaignStats, Self::Error>> + Send;
+}
+
+/// What the sender worker needs beyond editing: leasing due recipients and
+/// recording each email around the provider call.
+pub trait SenderRepo: CampaignRepo {
+    /// Live, active campaigns.
+    fn active_campaigns(&self) -> impl Future<Output = Result<Vec<Uuid>, Self::Error>> + Send;
+    /// Lease up to `limit` recipients due by `now` until `lease_until`,
+    /// skipping rows another worker holds.
+    fn claim_due(
+        &self,
+        now: DateTime<Utc>,
+        lease_until: DateTime<Utc>,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<DueRecipient>, Self::Error>> + Send;
+    /// The rotation with each mailbox's owner and the emails this campaign
+    /// reserved from it since `since`.
+    fn sender_usage(
+        &self,
+        id: Uuid,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<SenderUsage>, Self::Error>> + Send;
+    /// Reserve the send before the provider call; an earlier reservation for
+    /// the same step and address is returned instead.
+    fn reserve(
+        &self,
+        reservation: &Reservation,
+    ) -> impl Future<Output = Result<Reserved, Self::Error>> + Send;
+    /// Record the send and move the recipient on in one transaction, if the
+    /// recipient is still active at `claimed_position`.
+    fn finalize(
+        &self,
+        send: Option<(Uuid, SendRecord)>,
+        id: Uuid,
+        row_id: RowId,
+        claimed_position: u16,
+        update: RecipientUpdate,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    /// Complete an active campaign with no active recipients left.
+    fn complete_if_done(&self, id: Uuid) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+}
+
+/// Storage of SMTP and SendGrid identities.
+pub trait IdentityRepo: Send + Sync + 'static {
+    /// Adapter error.
+    type Error: std::error::Error + Send + Sync + 'static;
+    /// The user's identities.
+    fn list_identities(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<StoredIdentity>, Self::Error>> + Send;
+    /// One identity by id, whoever owns it.
+    fn get_identity(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<StoredIdentity>, Self::Error>> + Send;
+    /// Insert, or replace the user's identity with the same `From` address.
+    fn upsert_identity(
+        &self,
+        identity: &StoredIdentity,
+    ) -> impl Future<Output = Result<StoredIdentity, Self::Error>> + Send;
+    /// Delete the user's identity; false when there was none.
+    fn delete_identity(
+        &self,
+        user_id: &str,
+        id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+}
+
+/// Encrypts identity secrets, bound to their owner.
+pub trait SecretCipher: Send + Sync + 'static {
+    /// Adapter error; never carries plaintext.
+    type Error: std::error::Error + Send + Sync + 'static;
+    /// Encrypt for `owner`.
+    fn encrypt(
+        &self,
+        owner: &str,
+        secret: &Secret,
+    ) -> impl Future<Output = Result<EncryptedSecret, Self::Error>> + Send;
+    /// Decrypt what was encrypted for `owner`.
+    fn decrypt(
+        &self,
+        owner: &str,
+        secret: &EncryptedSecret,
+    ) -> impl Future<Output = Result<Secret, Self::Error>> + Send;
+}
+
+/// Delivers rendered campaign email.
+pub trait Outbox: Send + Sync + 'static {
+    /// Send one email. Replaying the same `send_id` through a connected inbox
+    /// returns the first outcome rather than sending again.
+    fn deliver(
+        &self,
+        mailbox: &Mailbox,
+        email: &OutboundEmail,
+    ) -> impl Future<Output = Result<Delivered, DeliveryError>> + Send;
+    /// Check an identity's credentials with its provider without sending.
+    fn verify(
+        &self,
+        credentials: &IdentityCredentials,
+    ) -> impl Future<Output = Result<(), DeliveryError>> + Send;
 }
 
 /// The team's CRM contacts, read for enrollment. Implemented by CRM.

@@ -198,7 +198,7 @@ pub struct StepInput {
 }
 
 /// The mailbox a sender slot sends from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SenderMailbox {
     /// A connected Gmail or Outlook inbox; mail lands in its Sent folder.
@@ -441,6 +441,382 @@ pub enum SendersOutcome {
     NotOwned,
     /// The campaign is trashed or gone.
     NotLive,
+}
+
+/// How a sending identity delivers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentityTransport {
+    /// SMTP submission; replies are read by IMAP.
+    Smtp,
+    /// The SendGrid v3 mail API.
+    Sendgrid,
+}
+
+impl IdentityTransport {
+    /// Database representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Smtp => "smtp",
+            Self::Sendgrid => "sendgrid",
+        }
+    }
+    /// Parse the database representation.
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value {
+            "smtp" => Self::Smtp,
+            "sendgrid" => Self::Sendgrid,
+            _ => return None,
+        })
+    }
+}
+
+/// An SMTP or SendGrid mailbox a user may add to campaigns. The secret is
+/// never returned.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SendingIdentity {
+    /// Identity, used as a sender's `identityId`.
+    pub id: Uuid,
+    /// Delivery.
+    pub transport: IdentityTransport,
+    /// The `From` address.
+    pub from_email: String,
+    /// The `From` display name.
+    #[schema(required = true)]
+    pub from_name: Option<String>,
+    /// SMTP submission host.
+    #[schema(required = true)]
+    pub smtp_host: Option<String>,
+    /// SMTP submission port: 465 for implicit TLS, otherwise STARTTLS.
+    #[schema(required = true)]
+    pub smtp_port: Option<u16>,
+    /// IMAP host polled for replies and bounces.
+    #[schema(required = true)]
+    pub imap_host: Option<String>,
+    /// IMAP port, implicit TLS.
+    #[schema(required = true)]
+    pub imap_port: Option<u16>,
+    /// SMTP and IMAP login.
+    #[schema(required = true)]
+    pub username: Option<String>,
+    /// When the provider last accepted the credentials.
+    #[schema(required = true)]
+    pub verified_at: Option<DateTime<Utc>>,
+    /// Creation time.
+    pub created_at: DateTime<Utc>,
+}
+
+/// A password or API key as typed. Redacts its `Debug` and zeroizes on drop.
+#[derive(Clone, Deserialize)]
+#[serde(transparent)]
+pub struct Secret(zeroize::Zeroizing<String>);
+
+impl Secret {
+    /// Wrap plaintext.
+    pub fn new(value: String) -> Self {
+        Self(zeroize::Zeroizing::new(value))
+    }
+    /// The plaintext, only for the transport that authenticates with it.
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Secret(redacted)")
+    }
+}
+
+/// Add an SMTP or SendGrid identity. The credentials are checked with the
+/// provider before anything is stored, and stored encrypted.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateSendingIdentity {
+    /// Delivery.
+    pub transport: IdentityTransport,
+    /// The `From` address; a SendGrid sender must be verified there.
+    pub from_email: String,
+    /// The `From` display name.
+    #[serde(default)]
+    pub from_name: Option<String>,
+    /// SMTP submission host; required for SMTP.
+    #[serde(default)]
+    pub smtp_host: Option<String>,
+    /// SMTP port; required for SMTP.
+    #[serde(default)]
+    pub smtp_port: Option<u16>,
+    /// IMAP host for replies; optional.
+    #[serde(default)]
+    pub imap_host: Option<String>,
+    /// IMAP port; defaults to 993 with a host.
+    #[serde(default)]
+    pub imap_port: Option<u16>,
+    /// Login; required for SMTP.
+    #[serde(default)]
+    pub username: Option<String>,
+    /// SMTP password (an app password for Gmail) or SendGrid API key.
+    #[schema(value_type = String)]
+    pub secret: Secret,
+}
+
+/// KMS ciphertext of a secret, bound to its owner.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EncryptedSecret {
+    /// Ciphertext blob.
+    pub ciphertext: Vec<u8>,
+    /// Scheme that produced it.
+    pub encryption_version: i16,
+    /// Key that encrypted it.
+    pub kms_key_id: String,
+}
+
+/// An identity as stored.
+#[derive(Debug, Clone)]
+pub struct StoredIdentity {
+    /// Public fields.
+    pub identity: SendingIdentity,
+    /// Owner the secret is bound to.
+    pub user_id: String,
+    /// The encrypted secret.
+    pub secret: EncryptedSecret,
+}
+
+/// Credentials ready for one delivery; never logged.
+#[derive(Debug, Clone)]
+pub struct IdentityCredentials {
+    /// Public fields.
+    pub identity: SendingIdentity,
+    /// Decrypted password or API key.
+    pub secret: Secret,
+}
+
+/// A sending slot with the owner of its mailbox and today's use.
+#[derive(Debug, Clone)]
+pub struct SenderUsage {
+    /// The slot.
+    pub sender: Sender,
+    /// Mailbox owner; `None` once the inbox is disconnected.
+    pub owner: Option<String>,
+    /// Emails this campaign reserved from the mailbox in the last day.
+    pub sent_today: u32,
+}
+
+/// The mailbox and thread of a recipient's first email.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FirstSend {
+    /// Mailbox it went out from; `None` if that mailbox was deleted.
+    pub mailbox: Option<SenderMailbox>,
+    /// Email's message row, for connected inboxes.
+    pub email_message_id: Option<Uuid>,
+    /// RFC 5322 Message-ID, for SMTP and SendGrid.
+    pub rfc_message_id: Option<String>,
+    /// Subject as sent.
+    pub subject: Option<String>,
+}
+
+/// A recipient whose next step is due, leased to one sender until its
+/// lease ends.
+#[derive(Debug, Clone)]
+pub struct DueRecipient {
+    /// Campaign.
+    pub campaign_id: Uuid,
+    /// Recipient row.
+    pub row_id: RowId,
+    /// Address.
+    pub email: String,
+    /// Name.
+    pub name: Option<String>,
+    /// Zone.
+    pub time_zone: Option<String>,
+    /// Step to send.
+    pub position: u16,
+    /// Consecutive transient failures.
+    pub send_attempts: u16,
+    /// The first email, for follow-ups.
+    pub first: Option<FirstSend>,
+}
+
+/// Status of one reserved email.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SendStatus {
+    /// Reserved; the provider call may or may not have happened.
+    Reserved,
+    /// Accepted by the provider or by email's send admission.
+    Sent,
+    /// Refused for good.
+    Failed,
+    /// Possibly delivered; never retried.
+    Uncertain,
+}
+
+impl SendStatus {
+    /// Database representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Reserved => "reserved",
+            Self::Sent => "sent",
+            Self::Failed => "failed",
+            Self::Uncertain => "uncertain",
+        }
+    }
+    /// Parse the database representation.
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value {
+            "reserved" => Self::Reserved,
+            "sent" => Self::Sent,
+            "failed" => Self::Failed,
+            "uncertain" => Self::Uncertain,
+            _ => return None,
+        })
+    }
+}
+
+/// A send row to reserve before the provider call.
+#[derive(Debug, Clone)]
+pub struct Reservation {
+    /// New send id; also email's send attempt id.
+    pub id: Uuid,
+    /// Campaign.
+    pub campaign_id: Uuid,
+    /// Step.
+    pub step_id: Uuid,
+    /// Recipient row.
+    pub row_id: RowId,
+    /// Address.
+    pub recipient_email: String,
+    /// Mailbox.
+    pub mailbox: SenderMailbox,
+    /// Message-ID this email will carry, when the sender chooses it.
+    pub rfc_message_id: Option<String>,
+    /// Rendered subject.
+    pub subject: String,
+}
+
+/// The reserved row: this reservation, or an earlier one for the same step
+/// and address.
+#[derive(Debug, Clone)]
+pub struct Reserved {
+    /// Send id.
+    pub id: Uuid,
+    /// Whether this call inserted it.
+    pub inserted: bool,
+    /// Current status.
+    pub status: SendStatus,
+    /// Mailbox it was reserved on.
+    pub mailbox: Option<SenderMailbox>,
+    /// Message-ID it was reserved with.
+    pub rfc_message_id: Option<String>,
+}
+
+/// What became of a reserved send.
+#[derive(Debug, Clone)]
+pub enum SendRecord {
+    /// Accepted.
+    Sent {
+        /// Email's message row.
+        email_message_id: Option<Uuid>,
+        /// RFC Message-ID, when known.
+        rfc_message_id: Option<String>,
+    },
+    /// Refused for good.
+    Failed(String),
+    /// Possibly delivered.
+    Uncertain(String),
+    /// Nothing was sent; the reservation is withdrawn so a retry can make it.
+    Withdrawn,
+    /// Settled earlier; the row stays as it is.
+    Unchanged,
+}
+
+/// How a recipient moves on after a step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecipientUpdate {
+    /// Due for `position` at `at`, or finished when `at` is `None`.
+    Advance {
+        /// Next step.
+        position: u16,
+        /// When it is due.
+        at: Option<DateTime<Utc>>,
+    },
+    /// A permanent failure ends the sequence.
+    Fail,
+    /// Try the same step again at `at`, counting the attempt.
+    Retry {
+        /// When.
+        at: DateTime<Utc>,
+    },
+    /// Wait for capacity without counting an attempt.
+    Defer {
+        /// When.
+        at: DateTime<Utc>,
+    },
+}
+
+/// One rendered email, ready for a transport.
+#[derive(Debug, Clone)]
+pub struct OutboundEmail {
+    /// Send id: email's attempt id, and the local part of the Message-ID.
+    pub send_id: Uuid,
+    /// Recipient.
+    pub to_email: String,
+    /// Recipient name.
+    pub to_name: Option<String>,
+    /// Subject.
+    pub subject: String,
+    /// HTML body.
+    pub body_html: String,
+    /// Plain-text body.
+    pub body_text: String,
+    /// The composer's document, for connected inboxes.
+    pub body_macro: Option<String>,
+    /// Message-ID to set, for SMTP and SendGrid.
+    pub rfc_message_id: Option<String>,
+    /// The thread's first email in a connected inbox.
+    pub replying_to: Option<Uuid>,
+    /// The thread's first Message-ID, for SMTP and SendGrid threading.
+    pub in_reply_to: Option<String>,
+    /// One-click unsubscribe URL (RFC 8058).
+    pub unsubscribe_url: Option<String>,
+}
+
+/// The mailbox an email goes out from, resolved for delivery.
+#[derive(Debug, Clone)]
+pub enum Mailbox {
+    /// A connected inbox, sent as its owner through email's send admission.
+    Inbox {
+        /// `email_links` row.
+        link_id: Uuid,
+        /// Its owner.
+        owner: MacroUserIdStr<'static>,
+    },
+    /// An SMTP or SendGrid identity.
+    Identity(IdentityCredentials),
+}
+
+/// What a transport did.
+#[derive(Debug, Clone, Default)]
+pub struct Delivered {
+    /// Email's message row, for connected inboxes.
+    pub email_message_id: Option<Uuid>,
+    /// RFC Message-ID, when known.
+    pub rfc_message_id: Option<String>,
+}
+
+/// Why a transport did not deliver.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum DeliveryError {
+    /// Nothing was sent and a later attempt may succeed.
+    #[error("Temporary delivery failure: {0}")]
+    Transient(String),
+    /// The provider refused this email for good.
+    #[error("Delivery refused: {0}")]
+    Rejected(String),
+    /// The provider may have accepted it; it must not be sent again.
+    #[error("Delivery outcome unknown: {0}")]
+    Uncertain(String),
 }
 
 /// Errors crossing the campaign boundary.

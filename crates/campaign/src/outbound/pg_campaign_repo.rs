@@ -3,10 +3,12 @@
 
 use crate::domain::models::{
     Campaign, CampaignBlueprint, CampaignSettings, CampaignSharing, CampaignStats,
-    CampaignStatus, Enrollment, Recipient, RecipientState, Sender, SenderMailbox, SendersOutcome,
-    Step, StepInput, StepStats, StepsOutcome,
+    CampaignStatus, DueRecipient, Enrollment, FirstSend, Recipient, RecipientState,
+    RecipientUpdate, Reservation, Reserved, SendRecord, SendStatus, Sender, SenderMailbox,
+    SenderUsage, SendersOutcome, Step, StepInput, StepStats, StepsOutcome,
 };
-use crate::domain::ports::CampaignRepo;
+use crate::domain::ports::{CampaignRepo, SenderRepo};
+use chrono::{DateTime, Utc};
 use databases::domain::provisioning::DatabaseStorageProvisioner;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -31,7 +33,7 @@ pub enum CampaignRepoError {
 
 /// Owns only campaign tables; database storage is accessed through its port.
 pub struct PgCampaignRepo<Database> {
-    pool: PgPool,
+    pub(super) pool: PgPool,
     database: Database,
 }
 
@@ -48,6 +50,42 @@ fn decode(message: &'static str) -> sqlx::Error {
 
 fn count(value: i64) -> u64 {
     u64::try_from(value).unwrap_or_default()
+}
+
+/// A sender or send row's mailbox columns.
+fn mailbox(link_id: Option<Uuid>, identity_id: Option<Uuid>) -> Option<SenderMailbox> {
+    match (link_id, identity_id) {
+        (Some(link_id), None) => Some(SenderMailbox::Link { link_id }),
+        (None, Some(identity_id)) => Some(SenderMailbox::Identity { identity_id }),
+        _ => None,
+    }
+}
+
+fn mailbox_columns(mailbox: SenderMailbox) -> (Option<Uuid>, Option<Uuid>) {
+    match mailbox {
+        SenderMailbox::Link { link_id } => (Some(link_id), None),
+        SenderMailbox::Identity { identity_id } => (None, Some(identity_id)),
+    }
+}
+
+/// Transient failures of one step before the recipient's sequence fails.
+const MAX_SEND_ATTEMPTS: i16 = 5;
+
+async fn mark_send(
+    tx: &mut Transaction<'static, Postgres>,
+    id: Uuid,
+    status: SendStatus,
+    error: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE campaign_sends SET status = $2, error = $3 WHERE id = $1",
+        id,
+        status.as_str(),
+        error,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 /// Lock a live campaign for a policy change in `tx`.
@@ -611,5 +649,293 @@ where
             opened: steps.iter().map(|step| step.opened).sum(),
             steps,
         })
+    }
+}
+
+impl<Database> SenderRepo for PgCampaignRepo<Database>
+where
+    Database: DatabaseStorageProvisioner<Transaction = Transaction<'static, Postgres>>,
+{
+    async fn active_campaigns(&self) -> Result<Vec<Uuid>, Self::Error> {
+        Ok(sqlx::query_scalar!(
+            "SELECT id FROM campaign_entities WHERE status = 'active' AND trashed_at IS NULL"
+        )
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn claim_due(
+        &self,
+        now: DateTime<Utc>,
+        lease_until: DateTime<Utc>,
+        limit: u32,
+    ) -> Result<Vec<DueRecipient>, Self::Error> {
+        // The lease moves next_send_at past the batch, so a crashed worker's
+        // recipients come due again once it expires.
+        let rows = sqlx::query!(
+            r#"WITH due AS (
+                   SELECT r.campaign_id, r.row_id
+                   FROM campaign_recipients r
+                   JOIN campaign_entities c ON c.id = r.campaign_id
+                   WHERE r.state = 'active' AND r.next_send_at <= $1
+                     AND c.status = 'active' AND c.trashed_at IS NULL
+                   ORDER BY r.next_send_at
+                   LIMIT $3
+                   FOR UPDATE OF r SKIP LOCKED
+               ), leased AS (
+                   UPDATE campaign_recipients r SET next_send_at = $2, updated_at = now()
+                   FROM due WHERE r.campaign_id = due.campaign_id AND r.row_id = due.row_id
+                   RETURNING r.campaign_id, r.row_id, r.email, r.name, r.time_zone,
+                             r.next_position, r.send_attempts
+               )
+               SELECT l.campaign_id AS "campaign_id!", l.row_id AS "row_id!", l.email AS "email!",
+                      l.name, l.time_zone, l.next_position AS "next_position!",
+                      l.send_attempts AS "send_attempts!",
+                      f.id AS "first_id?", f.link_id AS "first_link_id?",
+                      f.identity_id AS "first_identity_id?",
+                      f.email_message_id AS "first_email_message_id?",
+                      f.rfc_message_id AS "first_rfc_message_id?", f.subject AS "first_subject?"
+               FROM leased l
+               LEFT JOIN LATERAL (
+                   SELECT se.id, se.link_id, se.identity_id, se.email_message_id,
+                          se.rfc_message_id, se.subject
+                   FROM campaign_sends se JOIN campaign_steps st ON st.id = se.step_id
+                   WHERE se.campaign_id = l.campaign_id AND se.recipient_email = l.email
+                     AND se.status = 'sent'
+                   ORDER BY st.position LIMIT 1
+               ) f ON true"#,
+            now,
+            lease_until,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| DueRecipient {
+                campaign_id: row.campaign_id,
+                row_id: RowId::from_uuid(row.row_id),
+                email: row.email,
+                name: row.name,
+                time_zone: row.time_zone,
+                position: row.next_position as u16,
+                send_attempts: row.send_attempts as u16,
+                first: row.first_id.map(|_| FirstSend {
+                    mailbox: mailbox(row.first_link_id, row.first_identity_id),
+                    email_message_id: row.first_email_message_id,
+                    rfc_message_id: row.first_rfc_message_id,
+                    subject: row.first_subject,
+                }),
+            })
+            .collect())
+    }
+
+    async fn sender_usage(&self, id: Uuid, since: DateTime<Utc>) -> Result<Vec<SenderUsage>, Self::Error> {
+        sqlx::query!(
+            r#"SELECT s.link_id, s.identity_id, s.daily_cap,
+                      coalesce(l.macro_id, i.user_id) AS owner,
+                      (SELECT count(*) FROM campaign_sends se
+                        WHERE se.campaign_id = s.campaign_id AND se.reserved_at >= $2
+                          AND se.status <> 'failed'
+                          AND (se.link_id = s.link_id OR se.identity_id = s.identity_id)) AS "sent_today!"
+               FROM campaign_senders s
+               LEFT JOIN email_links l ON l.id = s.link_id AND l.deleting_at IS NULL
+               LEFT JOIN campaign_sending_identities i ON i.id = s.identity_id
+               WHERE s.campaign_id = $1
+               ORDER BY s.position"#,
+            id,
+            since,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            Ok(SenderUsage {
+                sender: Sender {
+                    mailbox: mailbox(row.link_id, row.identity_id)
+                        .ok_or_else(|| decode("Invalid campaign sender"))?,
+                    daily_cap: row.daily_cap as u32,
+                },
+                owner: row.owner,
+                sent_today: u32::try_from(row.sent_today).unwrap_or(u32::MAX),
+            })
+        })
+        .collect()
+    }
+
+    #[tracing::instrument(skip_all, fields(send_id = %reservation.id), err)]
+    async fn reserve(&self, reservation: &Reservation) -> Result<Reserved, Self::Error> {
+        let (link_id, identity_id) = mailbox_columns(reservation.mailbox);
+        let inserted = sqlx::query!(
+            "INSERT INTO campaign_sends
+                 (id, campaign_id, step_id, row_id, recipient_email, link_id, identity_id, rfc_message_id, subject)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (campaign_id, step_id, recipient_email) DO NOTHING",
+            reservation.id,
+            reservation.campaign_id,
+            reservation.step_id,
+            reservation.row_id.into_uuid(),
+            reservation.recipient_email,
+            link_id,
+            identity_id,
+            reservation.rfc_message_id,
+            reservation.subject,
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            == 1;
+        if inserted {
+            return Ok(Reserved {
+                id: reservation.id,
+                inserted,
+                status: SendStatus::Reserved,
+                mailbox: Some(reservation.mailbox),
+                rfc_message_id: reservation.rfc_message_id.clone(),
+            });
+        }
+        let row = sqlx::query!(
+            "SELECT id, status, link_id, identity_id, rfc_message_id FROM campaign_sends
+             WHERE campaign_id = $1 AND step_id = $2 AND recipient_email = $3",
+            reservation.campaign_id,
+            reservation.step_id,
+            reservation.recipient_email,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(Reserved {
+            id: row.id,
+            inserted,
+            status: SendStatus::parse(&row.status).ok_or_else(|| decode("Invalid send status"))?,
+            mailbox: mailbox(row.link_id, row.identity_id),
+            rfc_message_id: row.rfc_message_id,
+        })
+    }
+
+    #[tracing::instrument(skip(self, send), err)]
+    async fn finalize(
+        &self,
+        send: Option<(Uuid, SendRecord)>,
+        id: Uuid,
+        row_id: RowId,
+        claimed_position: u16,
+        update: RecipientUpdate,
+    ) -> Result<(), Self::Error> {
+        let mut tx = self.pool.begin().await?;
+        if let Some((send_id, record)) = send {
+            match record {
+                SendRecord::Sent {
+                    email_message_id,
+                    rfc_message_id,
+                } => {
+                    sqlx::query!(
+                        "UPDATE campaign_sends SET status = 'sent', error = NULL, sent_at = now(),
+                             email_message_id = coalesce($2, email_message_id),
+                             rfc_message_id = coalesce($3, rfc_message_id)
+                         WHERE id = $1",
+                        send_id,
+                        email_message_id,
+                        rfc_message_id,
+                    )
+                    .execute(&mut *tx)
+                    .await?;
+                }
+                SendRecord::Failed(error) => {
+                    mark_send(&mut tx, send_id, SendStatus::Failed, &error).await?;
+                }
+                SendRecord::Uncertain(error) => {
+                    mark_send(&mut tx, send_id, SendStatus::Uncertain, &error).await?;
+                }
+                SendRecord::Withdrawn => {
+                    sqlx::query!(
+                        "DELETE FROM campaign_sends WHERE id = $1 AND status = 'reserved'",
+                        send_id
+                    )
+                    .execute(&mut *tx)
+                    .await?;
+                }
+                SendRecord::Unchanged => {}
+            }
+        }
+        // A recipient who replied, unsubscribed or was removed meanwhile keeps
+        // that state; only the claimed step moves on.
+        let row_id = row_id.into_uuid();
+        let claimed = claimed_position as i16;
+        match update {
+            RecipientUpdate::Advance { position, at } => {
+                sqlx::query!(
+                    "UPDATE campaign_recipients
+                     SET next_position = $4, next_send_at = $5, send_attempts = 0,
+                         state = CASE WHEN $5::timestamptz IS NULL THEN 'completed' ELSE state END,
+                         updated_at = now()
+                     WHERE campaign_id = $1 AND row_id = $2 AND state = 'active' AND next_position = $3",
+                    id,
+                    row_id,
+                    claimed,
+                    position as i16,
+                    at,
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+            RecipientUpdate::Fail => {
+                sqlx::query!(
+                    "UPDATE campaign_recipients SET state = 'failed', next_send_at = NULL, updated_at = now()
+                     WHERE campaign_id = $1 AND row_id = $2 AND state = 'active' AND next_position = $3",
+                    id,
+                    row_id,
+                    claimed,
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+            RecipientUpdate::Retry { at } => {
+                sqlx::query!(
+                    "UPDATE campaign_recipients
+                     SET send_attempts = send_attempts + 1,
+                         state = CASE WHEN send_attempts + 1 >= $5 THEN 'failed' ELSE state END,
+                         next_send_at = CASE WHEN send_attempts + 1 >= $5 THEN NULL ELSE $4 END,
+                         updated_at = now()
+                     WHERE campaign_id = $1 AND row_id = $2 AND state = 'active' AND next_position = $3",
+                    id,
+                    row_id,
+                    claimed,
+                    at,
+                    MAX_SEND_ATTEMPTS,
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+            RecipientUpdate::Defer { at } => {
+                sqlx::query!(
+                    "UPDATE campaign_recipients SET next_send_at = $4, updated_at = now()
+                     WHERE campaign_id = $1 AND row_id = $2 AND state = 'active' AND next_position = $3",
+                    id,
+                    row_id,
+                    claimed,
+                    at,
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn complete_if_done(&self, id: Uuid) -> Result<bool, Self::Error> {
+        // A campaign with nobody enrolled yet is still waiting for rows.
+        Ok(sqlx::query!(
+            "UPDATE campaign_entities SET status = 'completed', updated_at = now()
+             WHERE id = $1 AND status = 'active' AND trashed_at IS NULL
+               AND EXISTS (SELECT 1 FROM campaign_recipients WHERE campaign_id = $1)
+               AND NOT EXISTS (SELECT 1 FROM campaign_recipients WHERE campaign_id = $1 AND state = 'active')",
+            id
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            == 1)
     }
 }
