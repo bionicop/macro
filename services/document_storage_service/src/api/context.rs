@@ -226,6 +226,19 @@ pub(crate) type DssPipelineWorkflowState =
         ai_tools::ToolCrmTransferService,
         AuthorizationService,
     >;
+pub(crate) type DssCampaignService = campaign::domain::service::CampaignServiceImpl<
+    campaign::outbound::pg_campaign_repo::PgCampaignRepo<
+        databases::outbound::pg_cell_store::PgCellStore<PropertiesPgRepo>,
+    >,
+    DatabasesServiceType,
+    EntityAccessService,
+    crm::outbound::lookup::PgCampaignContacts,
+>;
+pub(crate) type DssCampaignState = campaign::inbound::axum_router::CampaignRouterState<
+    DssCampaignService,
+    EntityAccessService,
+    AuthorizationService,
+>;
 
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
@@ -1047,6 +1060,7 @@ pub(crate) struct ApiContext {
     pub owned_purge_state: DssOwnedPurgeState,
     pub pipeline_state: DssPipelineState,
     pub pipeline_workflow_state: DssPipelineWorkflowState,
+    pub campaign_state: DssCampaignState,
 }
 
 env_var! {
