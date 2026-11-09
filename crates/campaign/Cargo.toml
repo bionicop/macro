@@ -68,3 +68,9 @@ uuid = { workspace = true }
 webpki-roots = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
+
+[dev-dependencies]
+databases = { path = "../databases", features = ["postgres"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+properties = { path = "../properties", default-features = false, features = ["outbound"] }
+tokio = { workspace = true, features = ["macros"] }
