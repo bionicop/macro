@@ -622,6 +622,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::ScheduledAction
             | EntityType::Reminder
             | EntityType::CrmPipeline
+            | EntityType::Campaign
             | EntityType::Database
             | EntityType::Form
             | EntityType::ExternalChat => {

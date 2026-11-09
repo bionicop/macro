@@ -74,6 +74,7 @@ pub async fn delete_user_entity_access_bulk(
         | EntityType::AgentSession
         | EntityType::Initiative
         | EntityType::CrmPipeline
+        | EntityType::Campaign
         | EntityType::Database
         | EntityType::Form
         | EntityType::ExternalChat => {

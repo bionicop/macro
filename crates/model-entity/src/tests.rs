@@ -79,3 +79,19 @@ fn form_round_trips_as_snake_case() {
     assert_eq!(EntityType::Form.as_ref(), "form");
     assert_eq!(EntityType::from_str("form").unwrap(), EntityType::Form);
 }
+
+#[test]
+fn campaign_round_trips_as_snake_case() {
+    let encoded = serde_json::to_string(&EntityType::Campaign).unwrap();
+    assert_eq!(encoded, "\"campaign\"");
+    assert_eq!(
+        serde_json::from_str::<EntityType>(&encoded).unwrap(),
+        EntityType::Campaign
+    );
+    assert_eq!(EntityType::Campaign.as_ref(), "campaign");
+    assert_eq!(
+        EntityType::from_str("campaign").unwrap(),
+        EntityType::Campaign
+    );
+    assert!(!EntityType::Campaign.is_valid_entity_access_entity());
+}

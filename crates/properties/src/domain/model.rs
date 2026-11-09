@@ -55,6 +55,7 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         AccessEntityType::User => Some(EntityType::User),
         AccessEntityType::ChannelMessage
         | AccessEntityType::CrmPipeline
+        | AccessEntityType::Campaign
         | AccessEntityType::Database
         | AccessEntityType::Form
         | AccessEntityType::ExternalChat

@@ -88,6 +88,9 @@ pub enum EntityType {
     /// A chat from another messaging service (see [`ExternalChatProvider`])
     /// a person added to Macro as an independently shared entity.
     ExternalChat,
+    /// An outreach campaign: timed email steps sent to a recipient table on
+    /// shared database storage (see the `campaign` crate)
+    Campaign,
 }
 
 impl EntityType {
@@ -144,6 +147,10 @@ impl EntityType {
             // the folder it is filed in.
             EntityType::Form => true,
             EntityType::ExternalChat => true,
+            // Same shape as CRM pipelines: grants are `entity_access` rows
+            // resolved by the campaign's own access query, and a campaign is
+            // not filed into a project.
+            EntityType::Campaign => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

@@ -453,6 +453,21 @@ impl AccessRepository for MockRepo {
         Ok(self.pipeline_access_list.lock().await.clone())
     }
 
+    async fn get_campaign_access(
+        &self,
+        _id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.pipeline_access.lock().await)
+    }
+
+    async fn list_campaign_access(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        Ok(self.pipeline_access_list.lock().await.clone())
+    }
+
     async fn get_database_access(
         &self,
         _database_id: &str,

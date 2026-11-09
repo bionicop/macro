@@ -346,6 +346,32 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_campaign_access(
+        &self,
+        id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let id = id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid campaign ID"))?;
+        let sources = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::campaign_access::get_campaign_access(&self.pool, id, &sources).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn list_campaign_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::campaign_access::list_campaign_access(&self.pool, &sources).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_database_access(
         &self,
         database_id: &str,
@@ -595,6 +621,9 @@ impl AccessRepository for PgAccessRepository {
             }
             EntityType::CrmPipeline => {
                 queries::pipeline_access::get_pipeline_access(&self.pool, entity_uuid, &source_ids).await
+            }
+            EntityType::Campaign => {
+                queries::campaign_access::get_campaign_access(&self.pool, entity_uuid, &source_ids).await
             }
             EntityType::Database => {
                 queries::database_access::get_database_access(
