@@ -4,11 +4,12 @@ use crate::domain::models::{
     AccessibleCampaign, CampaignError, DeliveryError, CampaignSettings, CampaignSharing, CampaignStats,
     CreateCampaign, LaunchCampaign, LaunchOutcome, Recipients, Sender, Step, StepInput,
 };
+use crate::domain::export;
 use crate::domain::service::CampaignService;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, Query, State},
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post, put},
 };
@@ -105,6 +106,7 @@ where
         .route("/{id}/launch", post(launch::<P, E, A>))
         .route("/{id}/pause", post(pause::<P, E, A>))
         .route("/{id}/recipients", get(recipients::<P, E, A>))
+        .route("/{id}/recipients/export", get(export_recipients::<P, E, A>))
         .route("/{id}/recipients/remove", post(remove_recipients::<P, E, A>))
         .route("/{id}/stats", get(stats::<P, E, A>))
         .with_state(state)
@@ -564,6 +566,33 @@ pub async fn recipients<
             )
             .await?,
     ))
+}
+
+/// Every enrolled recipient as a CSV file.
+#[utoipa::path(get, path = "/campaigns/{id}/recipients/export", operation_id = "export_campaign_recipients",
+    params(("id" = Uuid, Path)), responses((status = 200, content_type = "text/csv", body = String)))]
+pub async fn export_recipients<
+    P: CampaignService,
+    E: EntityAccessService,
+    A: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<A, UserOrInternal>,
+    State(state): State<CampaignRouterState<P, E, A>>,
+    Path(id): Path<Uuid>,
+) -> Result<Response, CampaignError> {
+    let recipients = state
+        .service
+        .export_recipients(receipt::<ViewAccessLevel, _, _>(&*state.access, auth, id).await?)
+        .await?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "text/csv; charset=utf-8"),
+            (header::CONTENT_DISPOSITION, "attachment; filename=\"campaign-recipients.csv\""),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        export::recipients_csv(&recipients),
+    )
+        .into_response())
 }
 
 /// Recipients to stop mailing.

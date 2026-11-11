@@ -4,7 +4,7 @@
 use super::models::{
     AccessibleCampaign, Campaign, CampaignBlueprint, CampaignError, CampaignSettings,
     CampaignSharing, CampaignStats, CampaignStatus, CreateCampaign, Enrollment, LaunchCampaign,
-    LaunchOutcome, Recipients, Sender, SendersOutcome, Step, StepInput, StepsOutcome,
+    LaunchOutcome, Recipient, Recipients, Sender, SendersOutcome, Step, StepInput, StepsOutcome,
 };
 use super::ports::{CampaignRepo, ContactDirectory};
 use super::schedule::{SendWindow, parse_zone};
@@ -47,6 +47,8 @@ const MAX_SENDERS: usize = 20;
 const MAX_CHANNEL_GRANTS_PER_UPDATE: usize = 100;
 /// Recipients per page.
 const RECIPIENT_PAGE: u32 = 100;
+/// Most recipients one export holds; larger campaigns are refused, never cut short.
+const EXPORT_LIMIT: usize = 50_000;
 
 /// Campaign use cases for HTTP, agents and other driving adapters.
 pub trait CampaignService: Send + Sync + 'static {
@@ -173,6 +175,11 @@ pub trait CampaignService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         after: Option<RowId>,
     ) -> impl Future<Output = Result<Recipients, CampaignError>> + Send;
+    /// Every enrolled recipient, for a file export.
+    fn export_recipients(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<Recipient>, CampaignError>> + Send;
     /// Stop these recipients' sequences; their rows stay.
     fn remove_recipients(
         &self,
@@ -1021,6 +1028,31 @@ where
             recipients,
             next: next.flatten(),
         })
+    }
+
+    async fn export_recipients(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<Recipient>, CampaignError> {
+        let campaign = self.live(&receipt).await?;
+        let mut all = Vec::new();
+        let mut after = None;
+        loop {
+            let page = self
+                .repo
+                .recipients(campaign.id, after, 1001)
+                .await
+                .map_err(storage)?;
+            let more = page.len() > 1000;
+            after = page.get(999).map(|recipient| recipient.row_id);
+            all.extend(page.into_iter().take(1000));
+            if all.len() > EXPORT_LIMIT {
+                return Err(CampaignError::Invalid("Too many recipients to export at once"));
+            }
+            if !more {
+                return Ok(all);
+            }
+        }
     }
 
     async fn remove_recipients(

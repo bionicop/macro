@@ -670,6 +670,7 @@ use utoipa::OpenApi;
         campaign::inbound::axum_router::launch,
         campaign::inbound::axum_router::pause,
         campaign::inbound::axum_router::recipients,
+        campaign::inbound::axum_router::export_recipients,
         campaign::inbound::axum_router::remove_recipients,
         campaign::inbound::axum_router::stats,
         campaign::inbound::identity_router::list,
