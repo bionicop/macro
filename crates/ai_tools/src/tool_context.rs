@@ -675,6 +675,7 @@ pub type ToolCampaignService = campaign::domain::service::CampaignServiceImpl<
     ToolDatabasesService,
     ToolEntityAccessService,
     crm::outbound::lookup::PgCampaignContacts,
+    MaybeToolEventBroker,
 >;
 
 /// Type alias for the campaign AI tool context.
@@ -687,6 +688,7 @@ pub type ToolCampaignToolContext = campaign::inbound::toolset::CampaignToolConte
 pub fn build_campaign_tool_context(
     pool: sqlx::PgPool,
     databases: &ToolDatabasesToolContext,
+    event_broker: MaybeToolEventBroker,
 ) -> ToolCampaignToolContext {
     campaign::inbound::toolset::CampaignToolContext {
         service: Arc::new(campaign::domain::service::CampaignServiceImpl::new(
@@ -700,6 +702,7 @@ pub fn build_campaign_tool_context(
             databases.service.clone(),
             databases.entity_access_service.clone(),
             crm::outbound::lookup::PgCampaignContacts::new(pool),
+            event_broker,
         )),
         access: databases.entity_access_service.clone(),
         actor: databases.actor,

@@ -233,6 +233,7 @@ pub(crate) type DssCampaignService = campaign::domain::service::CampaignServiceI
     DatabasesServiceType,
     EntityAccessService,
     crm::outbound::lookup::PgCampaignContacts,
+    DssEventBroker,
 >;
 pub(crate) type DssCampaignRepo = campaign::outbound::pg_campaign_repo::PgCampaignRepo<
     databases::outbound::pg_cell_store::PgCellStore<PropertiesPgRepo>,

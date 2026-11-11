@@ -4077,6 +4077,7 @@ dependencies = [
 name = "campaign"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4093,6 +4094,8 @@ dependencies = [
  "hmac 0.12.1",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "mail-builder",

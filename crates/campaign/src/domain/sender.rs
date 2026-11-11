@@ -18,6 +18,7 @@ use chrono::{DateTime, Duration, Utc};
 use databases::domain::models::{ColumnDetail, ColumnId, RowId};
 use databases::domain::storage::DatabaseStorageService;
 use entity_access::domain::ports::{AccessibleCampaigns, EntityAccessService};
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
@@ -47,8 +48,8 @@ impl Default for SenderLimits {
 }
 
 /// Campaign sending, composed from the campaign and identity services.
-pub struct CampaignSender<R, D, A, C, IR, Ci, O> {
-    campaigns: Arc<CampaignServiceImpl<R, D, A, C>>,
+pub struct CampaignSender<R, D, A, C, B, IR, Ci, O> {
+    campaigns: Arc<CampaignServiceImpl<R, D, A, C, B>>,
     identities: Arc<IdentityServiceImpl<IR, Ci, O>>,
     links: Option<SignedLinks>,
     limits: SenderLimits,
@@ -147,12 +148,13 @@ struct Batch<'a> {
     mailboxes: HashMap<SenderMailbox, Option<Mailbox>>,
 }
 
-impl<R, D, A, C, IR, Ci, O> CampaignSender<R, D, A, C, IR, Ci, O>
+impl<R, D, A, C, B, IR, Ci, O> CampaignSender<R, D, A, C, B, IR, Ci, O>
 where
     R: SenderRepo,
     D: DatabaseStorageService,
     A: EntityAccessService + AccessibleCampaigns,
     C: ContactDirectory,
+    B: MacroEventBroker,
     IR: IdentityRepo,
     Ci: SecretCipher,
     O: Outbox,
@@ -160,7 +162,7 @@ where
     /// Compose at the application root. Without links, email carries no
     /// unsubscribe link or open pixel.
     pub fn new(
-        campaigns: Arc<CampaignServiceImpl<R, D, A, C>>,
+        campaigns: Arc<CampaignServiceImpl<R, D, A, C, B>>,
         identities: Arc<IdentityServiceImpl<IR, Ci, O>>,
         links: Option<SignedLinks>,
         limits: SenderLimits,

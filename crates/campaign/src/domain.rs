@@ -1,5 +1,7 @@
 //! Campaign policy, independent of transport and persistence.
 
+pub mod activity;
+pub mod events;
 pub mod export;
 pub mod gate;
 pub mod identities;

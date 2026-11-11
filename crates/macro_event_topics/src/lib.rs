@@ -100,4 +100,6 @@ topics! {
     MacroDatabasesTopic => "macro.databases",
     /// Form lifecycle (created, renamed, trashed, restored, purged), sharing and response events.
     MacroFormsTopic => "macro.forms",
+    /// Campaign lifecycle (created, renamed, trashed, restored, launched, paused) events.
+    MacroCampaignsTopic => "macro.campaigns",
 }

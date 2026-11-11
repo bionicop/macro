@@ -1725,6 +1725,7 @@ async fn run_server() -> anyhow::Result<()> {
         databases_service.clone(),
         entity_access_service.clone(),
         crm::outbound::lookup::PgCampaignContacts::new(db.clone()),
+        macro_event_broker.clone(),
     ));
     let campaign_identities = Arc::new(campaign::domain::identities::IdentityServiceImpl::new(
         campaign::outbound::pg_campaign_repo::PgCampaignRepo::new(

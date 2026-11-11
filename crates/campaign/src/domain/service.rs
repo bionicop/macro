@@ -1,6 +1,10 @@
 //! Campaign use cases: CRM-pipeline-style policy over reusable database
 //! storage, plus the sequence, senders and launch.
 
+use super::events::{
+    Attribution, CampaignChangedMetadata, CampaignCreatedMetadata, CampaignMacroEvent,
+    CampaignRenamedMetadata, CampaignTopicEvent,
+};
 use super::models::{
     AccessibleCampaign, Campaign, CampaignBlueprint, CampaignError, CampaignSettings,
     CampaignSharing, CampaignStats, CampaignStatus, CreateCampaign, Enrollment, LaunchCampaign,
@@ -26,6 +30,7 @@ use entity_access::domain::{
     },
     ports::{AccessibleCampaigns, EntityAccessService},
 };
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::{
     SharePermissionV2, UpdateSharePermissionRequestV2,
@@ -194,11 +199,12 @@ pub trait CampaignService: Send + Sync + 'static {
 }
 
 /// Campaign policy, composed with the database, access and CRM services.
-pub struct CampaignServiceImpl<Repo, Databases, Access, Contacts> {
+pub struct CampaignServiceImpl<Repo, Databases, Access, Contacts, Broker> {
     pub(super) repo: Repo,
     pub(super) databases: Arc<Databases>,
     access: Arc<Access>,
     contacts: Contacts,
+    broker: Broker,
 }
 
 pub(super) fn storage(error: impl std::error::Error + Send + Sync + 'static) -> CampaignError {
@@ -211,6 +217,19 @@ fn actor<T: RequiredPermission>(
     match receipt.auth() {
         EntityAccessAuth::Authenticated(user) => Ok(user.clone()),
         _ => Err(CampaignError::Invalid("An authenticated user is required")),
+    }
+}
+
+/// Who a receipt says is acting, as events record it. Internal and
+/// anonymous receipts have nobody to attribute the change to.
+fn receipt_attribution<T: RequiredPermission>(receipt: &EntityAccessReceipt<T>) -> Option<Attribution> {
+    match receipt.auth() {
+        EntityAccessAuth::Authenticated(user) => Some(Attribution::user(user.clone())),
+        EntityAccessAuth::Bot(bot) => Some(Attribution {
+            actor: activity::Actor::new_from_bot(bot.bot_id()),
+            on_behalf_of: bot.scope().acting_user_id().cloned(),
+        }),
+        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
     }
 }
 
@@ -444,14 +463,16 @@ fn row_zone(row: &StorageRow, column: Option<ColumnId>) -> Option<String> {
     }
 }
 
-impl<R: CampaignRepo, D, A, C> CampaignServiceImpl<R, D, A, C> {
-    /// Compose the service from domain capabilities.
-    pub fn new(repo: R, databases: Arc<D>, access: Arc<A>, contacts: C) -> Self {
+impl<R: CampaignRepo, D, A, C, B> CampaignServiceImpl<R, D, A, C, B> {
+    /// Compose the service from domain capabilities. `broker` publishes the
+    /// campaign events activity is built from.
+    pub fn new(repo: R, databases: Arc<D>, access: Arc<A>, contacts: C, broker: B) -> Self {
         Self {
             repo,
             databases,
             access,
             contacts,
+            broker,
         }
     }
 
@@ -503,13 +524,22 @@ impl<R: CampaignRepo, D, A, C> CampaignServiceImpl<R, D, A, C> {
     }
 }
 
-impl<R, D, A, C> CampaignServiceImpl<R, D, A, C>
+impl<R, D, A, C, B> CampaignServiceImpl<R, D, A, C, B>
 where
     R: CampaignRepo,
     D: DatabaseStorageService,
     A: EntityAccessService + AccessibleCampaigns,
     C: ContactDirectory,
+    B: MacroEventBroker,
 {
+    /// Publish one domain event. The change it describes already committed,
+    /// so a broker failure is logged rather than surfaced.
+    fn emit(&self, event: CampaignTopicEvent) {
+        if let Err(error) = self.broker.send_event(&CampaignMacroEvent::new(event)) {
+            tracing::warn!(error = ?error, "failed to publish campaign event");
+        }
+    }
+
     pub(super) async fn recipient_table(&self, campaign: &Campaign) -> Result<TableDetail, CampaignError> {
         self.databases
             .storage_tables(campaign.database_id)
@@ -593,12 +623,13 @@ where
     }
 }
 
-impl<R, D, A, C> CampaignService for CampaignServiceImpl<R, D, A, C>
+impl<R, D, A, C, B> CampaignService for CampaignServiceImpl<R, D, A, C, B>
 where
     R: CampaignRepo,
     D: DatabaseStorageService,
     A: EntityAccessService + AccessibleCampaigns,
     C: ContactDirectory,
+    B: MacroEventBroker,
 {
     async fn create(
         &self,
@@ -610,6 +641,13 @@ where
         let blueprint = blueprint(team_id(&team)?, creator, name, input.sharing);
         let id = blueprint.id;
         self.repo.create(&blueprint).await.map_err(storage)?;
+        self.emit(CampaignTopicEvent::Created(CampaignCreatedMetadata {
+            campaign_id: id,
+            owner: blueprint.creator.clone(),
+            name: blueprint.name.clone(),
+            created_at: Utc::now(),
+            attribution: Attribution::user(blueprint.creator.clone()),
+        }));
         let campaign = self
             .repo
             .get_many(&[id])
@@ -770,7 +808,13 @@ where
     ) -> Result<(), CampaignError> {
         let name = name(&input)?;
         let campaign = self.live(&receipt).await?;
-        self.repo.rename(campaign.id, &name).await.map_err(storage)
+        self.repo.rename(campaign.id, &name).await.map_err(storage)?;
+        self.emit(CampaignTopicEvent::Renamed(CampaignRenamedMetadata {
+            campaign_id: campaign.id,
+            attribution: receipt_attribution(&receipt),
+            name,
+        }));
+        Ok(())
     }
 
     async fn share(
@@ -822,7 +866,17 @@ where
         self.repo
             .set_trashed(campaign.id, trashed)
             .await
-            .map_err(storage)
+            .map_err(storage)?;
+        let changed = CampaignChangedMetadata {
+            campaign_id: campaign.id,
+            attribution: receipt_attribution(&receipt),
+        };
+        self.emit(if trashed {
+            CampaignTopicEvent::Trashed(changed)
+        } else {
+            CampaignTopicEvent::Restored(changed)
+        });
+        Ok(())
     }
 
     async fn update_settings(
@@ -987,6 +1041,10 @@ where
         {
             return Err(CampaignError::Conflict("The campaign is already sending"));
         }
+        self.emit(CampaignTopicEvent::Launched(CampaignChangedMetadata {
+            campaign_id: campaign.id,
+            attribution: receipt_attribution(&receipt),
+        }));
         let _guard = self.guard(campaign.id).await?;
         self.enroll_rows(&campaign, first.delay_minutes).await
     }
@@ -1006,6 +1064,10 @@ where
         {
             return Err(CampaignError::Conflict("The campaign is not sending"));
         }
+        self.emit(CampaignTopicEvent::Paused(CampaignChangedMetadata {
+            campaign_id: campaign.id,
+            attribution: receipt_attribution(&receipt),
+        }));
         Ok(())
     }
 

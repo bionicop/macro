@@ -479,6 +479,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let campaign_tool_context = ai_tools::build_campaign_tool_context(
         pool.clone(),
         &databases_tool_context,
+        ai_tools::MaybeToolEventBroker::NoOp(Default::default()),
     );
 
     let calendar_tool_context = ai_tools::build_calendar_tool_context(

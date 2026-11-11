@@ -837,6 +837,7 @@ pub async fn build(
     let campaign_tool_context = ai_tools::build_campaign_tool_context(
         db.clone(),
         &databases_tool_context,
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
     );
 
     let calendar_tool_context = ai_tools::build_calendar_tool_context(

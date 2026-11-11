@@ -7,6 +7,7 @@
 
 use activity::Ingest;
 use call::domain::events::CallMacroEvent;
+use campaign::domain::events::CampaignMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use chat::domain::events::ChatMacroEvent;
 use databases::domain::events::DatabaseMacroEvent;
@@ -36,6 +37,7 @@ mod source {
             InitiativeMacroEvent,
             DatabaseMacroEvent,
             FormMacroEvent,
+            CampaignMacroEvent,
     );
 }
 pub(crate) use source::ActivitySourceEvent;
@@ -79,6 +81,7 @@ pub(crate) async fn ingest(
             ActivitySourceEvent::InitiativeMacroEvent(e) => arm(e.event()),
             ActivitySourceEvent::DatabaseMacroEvent(e) => arm(e.event()),
             ActivitySourceEvent::FormMacroEvent(event) => arm(event.event()),
+            ActivitySourceEvent::CampaignMacroEvent(event) => arm(event.event()),
         }
     })
     .await

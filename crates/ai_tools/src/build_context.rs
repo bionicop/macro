@@ -559,6 +559,7 @@ pub async fn build_tool_service_context_from_env(
     let campaign_tool_context = crate::tool_context::build_campaign_tool_context(
         pool.clone(),
         &databases_tool_context,
+        crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
     );
 
     let forms_tool_context = crate::tool_context::build_forms_tool_context(
