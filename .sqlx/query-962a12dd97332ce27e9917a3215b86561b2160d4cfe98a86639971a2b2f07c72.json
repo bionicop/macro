@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_recipients r\n               SET state = CASE WHEN s.reason = 'bounced' THEN 'bounced' ELSE 'unsubscribed' END,\n                   next_send_at = NULL, updated_at = now()\n               FROM campaign_entities c, campaign_suppressions s\n               WHERE c.id = r.campaign_id AND s.team_id = c.team_id\n                 AND s.email IN (lower(r.email), '@' || split_part(lower(r.email), '@', 2))\n                 AND r.state = 'active' AND r.next_send_at <= $1\n                 AND c.status = 'active' AND c.trashed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "962a12dd97332ce27e9917a3215b86561b2160d4cfe98a86639971a2b2f07c72"
+}

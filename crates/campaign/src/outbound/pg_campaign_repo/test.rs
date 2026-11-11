@@ -238,6 +238,42 @@ async fn enrollment_mails_each_address_once_and_skips_suppressed(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_blocked_domain_is_never_enrolled(pool: PgPool) {
+    let f = fixture(&pool).await;
+    sqlx::query("INSERT INTO campaign_suppressions (team_id, email, reason) VALUES ($1, '@blocked.example', 'manual')")
+        .bind(f.team_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let due = Utc::now();
+    let rows = [row(&pool, f.table_id, "a0").await, row(&pool, f.table_id, "a1").await];
+    let batch = [
+        enrollment(rows[0], "ada@blocked.example", due),
+        enrollment(rows[1], "bob@fine.example", due),
+    ];
+    assert_eq!(f.repo.enroll(f.campaign_id, f.team_id, &batch).await.unwrap(), 1);
+    let recipients = f.repo.recipients(f.campaign_id, None, 10).await.unwrap();
+    assert_eq!(recipients.len(), 1);
+    assert_eq!(recipients[0].email, "bob@fine.example");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn someone_suppressed_after_enrolling_is_stopped_not_leased(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let row_id = enrolled(&pool, &f).await;
+    sqlx::query("INSERT INTO campaign_suppressions (team_id, email, reason) VALUES ($1, '@example.com', 'manual')")
+        .bind(f.team_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let now = Utc::now();
+    assert!(f.repo.claim_due(now, now + Duration::minutes(10), 10).await.unwrap().is_empty());
+    let (recipient_state, next, _) = state(&pool, f.campaign_id, row_id).await;
+    assert_eq!(recipient_state, "unsubscribed");
+    assert!(next.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn claiming_leases_due_recipients_of_active_campaigns_only(pool: PgPool) {
     let f = fixture(&pool).await;
     let row_id = enrolled(&pool, &f).await;

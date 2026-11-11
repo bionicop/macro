@@ -526,13 +526,15 @@ where
         let zones: Vec<Option<String>> = recipients.iter().map(|r| r.time_zone.clone()).collect();
         let due: Vec<_> = recipients.iter().map(|r| r.next_send_at).collect();
         // One recipient per address: a contact in two rows is mailed once, and
-        // suppressed addresses are never enrolled.
+        // suppressed addresses, and addresses at a suppressed domain (stored as
+        // '@domain'), are never enrolled.
         let result = sqlx::query!(
             r#"INSERT INTO campaign_recipients (campaign_id, row_id, contact_id, email, name, time_zone, next_send_at)
                SELECT DISTINCT ON (r.email) $1, r.row_id, r.contact_id, r.email, r.name, r.time_zone, r.next_send_at
                FROM unnest($3::uuid[], $4::uuid[], $5::text[], $6::text[], $7::text[], $8::timestamptz[])
                  AS r(row_id, contact_id, email, name, time_zone, next_send_at)
-               WHERE NOT EXISTS (SELECT 1 FROM campaign_suppressions s WHERE s.team_id = $2 AND s.email = r.email)
+               WHERE NOT EXISTS (SELECT 1 FROM campaign_suppressions s WHERE s.team_id = $2
+                   AND s.email IN (r.email, '@' || split_part(r.email, '@', 2)))
                  AND NOT EXISTS (SELECT 1 FROM campaign_recipients e WHERE e.campaign_id = $1 AND e.email = r.email)
                ORDER BY r.email, r.row_id
                ON CONFLICT DO NOTHING"#,
@@ -670,6 +672,22 @@ where
         lease_until: DateTime<Utc>,
         limit: u32,
     ) -> Result<Vec<DueRecipient>, Self::Error> {
+        // Someone suppressed after enrolling (unsubscribed from another
+        // campaign, bounced, added by hand, or their domain blocked) must not be
+        // mailed: stop them before leasing.
+        sqlx::query!(
+            r#"UPDATE campaign_recipients r
+               SET state = CASE WHEN s.reason = 'bounced' THEN 'bounced' ELSE 'unsubscribed' END,
+                   next_send_at = NULL, updated_at = now()
+               FROM campaign_entities c, campaign_suppressions s
+               WHERE c.id = r.campaign_id AND s.team_id = c.team_id
+                 AND s.email IN (lower(r.email), '@' || split_part(lower(r.email), '@', 2))
+                 AND r.state = 'active' AND r.next_send_at <= $1
+                 AND c.status = 'active' AND c.trashed_at IS NULL"#,
+            now
+        )
+        .execute(&self.pool)
+        .await?;
         // The lease moves next_send_at past the batch, so a crashed worker's
         // recipients come due again once it expires.
         let rows = sqlx::query!(
