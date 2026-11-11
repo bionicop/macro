@@ -2,6 +2,7 @@
 //! renders the step, reserves the send, delivers it and moves the recipient
 //! on. The caller drives it on a timer; nothing here owns a runtime.
 
+use super::gate;
 use super::identities::IdentityServiceImpl;
 use super::links::{LinkAction, SignedLinks};
 use super::models::{
@@ -515,6 +516,14 @@ where
             (Mailbox::Identity(_), true, Some(first)) => (None, first.rfc_message_id.clone()),
             _ => (None, None),
         };
+        if let Err(reasons) = gate::check(&recipient.email, &subject, &body_text) {
+            // A mistake no sender wants: settle this recipient as failed, with why.
+            let record = SendRecord::Failed(format!("Blocked before sending: {}", reasons.join("; ")));
+            return self.finalize(recipient, Some((send_id, record)), RecipientUpdate::Fail).await;
+        }
+        for advice in gate::lint(&subject, &body_text) {
+            tracing::warn!(campaign_id = %recipient.campaign_id, advice, "campaign email style");
+        }
         let email = OutboundEmail {
             send_id,
             to_email: recipient.email.clone(),
