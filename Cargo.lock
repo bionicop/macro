@@ -4099,6 +4099,7 @@ dependencies = [
  "models_databases",
  "models_permissions",
  "models_properties",
+ "p256 0.14.0",
  "properties",
  "reqwest 0.13.4",
  "rootcause",

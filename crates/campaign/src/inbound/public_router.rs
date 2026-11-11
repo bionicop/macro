@@ -4,12 +4,14 @@
 
 use crate::domain::links::{LinkAction, SignedLinks};
 use crate::domain::ports::SenderRepo;
+use crate::domain::sendgrid_events::{self, EventKey, Outcome};
 use axum::{
     Router,
+    body::Bytes,
     extract::{Path, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{Html, IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -20,6 +22,8 @@ pub struct PublicRouterState<R> {
     pub repo: Arc<R>,
     /// Link signer; `None` answers every link as not found.
     pub links: Option<SignedLinks>,
+    /// SendGrid Event Webhook key; `None` answers the events route as not found.
+    pub sendgrid_events: Option<EventKey>,
 }
 
 impl<R> Clone for PublicRouterState<R> {
@@ -27,6 +31,7 @@ impl<R> Clone for PublicRouterState<R> {
         Self {
             repo: self.repo.clone(),
             links: self.links.clone(),
+            sendgrid_events: self.sendgrid_events.clone(),
         }
     }
 }
@@ -51,6 +56,7 @@ where
             get(unsubscribe_page::<R>).post(unsubscribe::<R>),
         )
         .route("/public/open/{send_id}/{token}", get(open::<R>))
+        .route("/public/sendgrid/events", post(sendgrid_events::<R>))
         .with_state(state)
 }
 
@@ -120,6 +126,49 @@ pub async fn open<R: SenderRepo>(
         PIXEL,
     )
         .into_response()
+}
+
+/// SendGrid's Event Webhook. Authenticated by SendGrid's ECDSA signature over
+/// the raw body, not a session. Bounces and drops stop the recipient and
+/// suppress the address; spam reports and unsubscribes opt them out. A bad
+/// signature is 403; a storage error is 500 so SendGrid retries the batch,
+/// which is safe because every effect is idempotent.
+#[utoipa::path(post, path = "/campaigns/public/sendgrid/events",
+    operation_id = "campaign_sendgrid_events",
+    request_body(content = String, content_type = "application/json"),
+    responses((status = 200), (status = 400), (status = 403), (status = 404)))]
+pub async fn sendgrid_events<R: SenderRepo>(
+    State(state): State<PublicRouterState<R>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let Some(key) = state.sendgrid_events.as_ref() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let header_text = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
+    if let Err(reason) = key.verify(
+        header_text(sendgrid_events::SIGNATURE_HEADER),
+        header_text(sendgrid_events::TIMESTAMP_HEADER),
+        &body,
+        chrono::Utc::now(),
+    ) {
+        tracing::warn!(%reason, "sendgrid event webhook refused");
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Ok(events) = sendgrid_events::parse(&body) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    for event in events {
+        let applied = match event.outcome {
+            Outcome::Undeliverable => state.repo.record_bounce(event.send_id).await,
+            Outcome::OptedOut => state.repo.unsubscribe(event.send_id).await,
+        };
+        if let Err(error) = applied {
+            tracing::error!(send_id = %event.send_id, event_id = %event.event_id, error = ?error, "sendgrid event not applied");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+    StatusCode::OK.into_response()
 }
 
 /// A transparent 1x1 GIF.

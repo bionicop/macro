@@ -1037,6 +1037,32 @@ where
         .await?)
     }
 
+    async fn record_bounce(&self, send_id: Uuid) -> Result<bool, Self::Error> {
+        // Same effects as detect_bounces, for one send a provider reported.
+        Ok(sqlx::query_scalar!(
+            r#"WITH marked AS (
+                   UPDATE campaign_sends SET bounced_at = now()
+                   WHERE id = $1 AND status = 'sent' AND bounced_at IS NULL
+                   RETURNING campaign_id, row_id, recipient_email
+               ), stopped AS (
+                   UPDATE campaign_recipients r SET state = 'bounced', next_send_at = NULL, updated_at = now()
+                   FROM marked m
+                   WHERE r.campaign_id = m.campaign_id AND r.row_id = m.row_id AND r.state = 'active'
+                   RETURNING 1
+               ), suppressed AS (
+                   INSERT INTO campaign_suppressions (team_id, email, reason, campaign_id)
+                   SELECT c.team_id, lower(m.recipient_email), 'bounced', m.campaign_id
+                   FROM marked m JOIN campaign_entities c ON c.id = m.campaign_id
+                   ON CONFLICT DO NOTHING
+                   RETURNING 1
+               )
+               SELECT EXISTS (SELECT 1 FROM marked) AS "marked!""#,
+            send_id
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
     async fn record_open(&self, send_id: Uuid) -> Result<(), Self::Error> {
         sqlx::query!(
             "UPDATE campaign_sends s SET opened_at = coalesce(s.opened_at, now()), open_count = s.open_count + 1

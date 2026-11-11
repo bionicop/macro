@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH marked AS (\n                   UPDATE campaign_sends SET bounced_at = now()\n                   WHERE id = $1 AND status = 'sent' AND bounced_at IS NULL\n                   RETURNING campaign_id, row_id, recipient_email\n               ), stopped AS (\n                   UPDATE campaign_recipients r SET state = 'bounced', next_send_at = NULL, updated_at = now()\n                   FROM marked m\n                   WHERE r.campaign_id = m.campaign_id AND r.row_id = m.row_id AND r.state = 'active'\n                   RETURNING 1\n               ), suppressed AS (\n                   INSERT INTO campaign_suppressions (team_id, email, reason, campaign_id)\n                   SELECT c.team_id, lower(m.recipient_email), 'bounced', m.campaign_id\n                   FROM marked m JOIN campaign_entities c ON c.id = m.campaign_id\n                   ON CONFLICT DO NOTHING\n                   RETURNING 1\n               )\n               SELECT EXISTS (SELECT 1 FROM marked) AS \"marked!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "marked!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "df7de209e2414879e9a2f09dff14a1fdad8165723b51efca1bf52641977fb94e"
+}

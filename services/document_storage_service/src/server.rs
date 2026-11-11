@@ -1757,6 +1757,9 @@ async fn run_server() -> anyhow::Result<()> {
             ),
         )),
         links: campaign_links.clone(),
+        sendgrid_events: campaign::domain::sendgrid_events::EventKey::from_base64(
+            &config.campaign_sendgrid_event_key,
+        ),
     };
     if config.campaign_sender_enabled {
         let links = campaign_links;

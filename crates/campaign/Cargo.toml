@@ -51,6 +51,7 @@ mail-builder = { version = "0.4.3", optional = true }
 models_databases = { path = "../models_databases" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
+p256 = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 rustls = { workspace = true, optional = true }

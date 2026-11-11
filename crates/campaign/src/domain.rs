@@ -8,5 +8,6 @@ pub mod models;
 pub mod ports;
 pub mod schedule;
 pub mod sender;
+pub mod sendgrid_events;
 pub mod service;
 pub mod template;

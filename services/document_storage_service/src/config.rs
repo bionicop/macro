@@ -252,6 +252,11 @@ pub struct Config {
     /// At least 32 bytes; signs unsubscribe and open links.
     #[macro_config_default(String::new())]
     pub campaign_link_secret: String,
+    /// SendGrid Signed Event Webhook public key (base64). Empty: the
+    /// /campaigns/public/sendgrid/events route answers 404 and SendGrid
+    /// bounces are not recorded.
+    #[macro_config_default(String::new())]
+    pub campaign_sendgrid_event_key: String,
 }
 
 impl Config {

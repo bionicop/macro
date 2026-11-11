@@ -179,6 +179,10 @@ pub trait SenderRepo: CampaignRepo {
     /// Stop mailing the send's recipient and suppress the address for the
     /// campaign's team; false when the send does not exist.
     fn unsubscribe(&self, send_id: Uuid) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+    /// Mark the send bounced, stop its recipient and suppress the address for
+    /// the campaign's team; false when the send does not exist or was
+    /// already marked.
+    fn record_bounce(&self, send_id: Uuid) -> impl Future<Output = Result<bool, Self::Error>> + Send;
     /// Count an open of a sent email, when its campaign tracks opens.
     fn record_open(&self, send_id: Uuid) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
