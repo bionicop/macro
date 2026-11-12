@@ -429,6 +429,11 @@ where
                 )
                 .await;
         };
+        if !step.condition.is_met(recipient.opened_earlier) {
+            // Nothing is sent, so the window does not apply: move on at once.
+            let update = self.advance(batch, recipient, &step, now);
+            return self.finalize(recipient, None, update).await;
+        }
         let window = match recipient.time_zone.as_deref().and_then(parse_zone) {
             Some(zone) => batch.window.in_zone(zone),
             None => batch.window,

@@ -151,6 +151,35 @@ pub struct AccessibleCampaign {
     pub grant: AccessLevel,
 }
 
+/// Whether a step is sent to a recipient, judged when the step comes due by
+/// whether they opened any earlier email of the sequence. A step that is not
+/// sent is skipped: the recipient moves on to the next step, which waits its
+/// own delay from the moment of the skip.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StepCondition {
+    /// Send to everyone still in the sequence.
+    #[default]
+    Always,
+    /// Send only if no earlier email was opened (the first step has none, so
+    /// it is always sent).
+    NotOpened,
+    /// Send only if an earlier email was opened (never true for the first step).
+    Opened,
+}
+
+impl StepCondition {
+    /// Whether the step goes out to a recipient who has (not) opened an
+    /// earlier email.
+    pub fn is_met(self, opened_earlier: bool) -> bool {
+        match self {
+            Self::Always => true,
+            Self::NotOpened => !opened_earlier,
+            Self::Opened => opened_earlier,
+        }
+    }
+}
+
 /// One email of the sequence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -171,6 +200,9 @@ pub struct Step {
     /// The composer's document, so the step reopens as written.
     #[schema(required = true)]
     pub body_macro: Option<String>,
+    /// When to send: always, only if no earlier email was opened, or only if
+    /// one was.
+    pub condition: StepCondition,
 }
 
 /// A step as written by an editor. Without an id it is new; steps left out
@@ -195,6 +227,9 @@ pub struct StepInput {
     /// The composer's document.
     #[serde(default)]
     pub body_macro: Option<String>,
+    /// When to send; always when absent.
+    #[serde(default)]
+    pub condition: StepCondition,
 }
 
 /// The mailbox a sender slot sends from.
@@ -743,6 +778,8 @@ pub struct DueRecipient {
     pub send_attempts: u16,
     /// The first email, for follow-ups.
     pub first: Option<FirstSend>,
+    /// Whether any email sent to them at an earlier step has been opened.
+    pub opened_earlier: bool,
 }
 
 /// Transient failures of one step before the recipient's sequence fails.

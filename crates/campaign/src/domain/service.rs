@@ -1190,17 +1190,37 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::domain::models::{DailyCounts, SenderMailbox};
+    use crate::domain::models::{DailyCounts, SenderMailbox, StepCondition};
 
     fn step(id: Option<Uuid>) -> StepInput {
         StepInput {
             id,
+            condition: StepCondition::Always,
             delay_minutes: 0,
             subject: "Hi".into(),
             body_html: "<p>Hi</p>".into(),
             body_text: None,
             body_macro: None,
         }
+    }
+
+    #[test]
+    fn conditions_read_earlier_opens() {
+        assert!(StepCondition::Always.is_met(true) && StepCondition::Always.is_met(false));
+        assert!(StepCondition::NotOpened.is_met(false) && !StepCondition::NotOpened.is_met(true));
+        assert!(StepCondition::Opened.is_met(true) && !StepCondition::Opened.is_met(false));
+    }
+
+    #[test]
+    fn a_step_without_a_condition_is_always_sent() {
+        let input: StepInput = serde_json::from_str(r#"{"bodyHtml":"<p>Hi</p>"}"#).unwrap();
+        assert_eq!(input.condition, StepCondition::Always);
+        let input: StepInput =
+            serde_json::from_str(r#"{"bodyHtml":"x","condition":"not_opened"}"#).unwrap();
+        assert_eq!(input.condition, StepCondition::NotOpened);
+        assert!(serde_json::from_str::<StepInput>(r#"{"bodyHtml":"x","condition":"sometimes"}"#).is_err());
+        let json = serde_json::to_value(StepCondition::Opened).unwrap();
+        assert_eq!(json, "opened");
     }
 
     #[test]

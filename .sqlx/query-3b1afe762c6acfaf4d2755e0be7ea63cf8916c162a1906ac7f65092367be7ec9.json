@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, position, delay_minutes, subject, body_html, body_text, body_macro FROM campaign_steps WHERE campaign_id = $1 ORDER BY position",
+  "query": "SELECT id, position, delay_minutes, subject, body_html, body_text, body_macro, send_condition FROM campaign_steps WHERE campaign_id = $1 ORDER BY position",
   "describe": {
     "columns": [
       {
@@ -37,6 +37,11 @@
         "ordinal": 6,
         "name": "body_macro",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "send_condition",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -51,8 +56,9 @@
       false,
       false,
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "49cf63caf8f1fbeeb22fe2a0c9802746e25c8a6dcf7bd72203b4ba930aba7978"
+  "hash": "3b1afe762c6acfaf4d2755e0be7ea63cf8916c162a1906ac7f65092367be7ec9"
 }

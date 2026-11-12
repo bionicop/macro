@@ -5,7 +5,7 @@ use crate::domain::models::{
     Campaign, CampaignBlueprint, CampaignSettings, CampaignSharing, CampaignStats,
     CampaignStatus, DailyCounts, DailyRange, DueRecipient, Enrollment, FirstSend, Recipient, RecipientState,
     RecipientUpdate, Reservation, Reserved, SendRecord, SendStatus, Sender, SenderMailbox,
-    SenderUsage, SendersOutcome, Step, StepInput, StepStats, StepsOutcome,
+    SenderUsage, SendersOutcome, Step, StepCondition, StepInput, StepStats, StepsOutcome,
 };
 use crate::domain::ports::{CampaignRepo, SenderRepo};
 use chrono::{DateTime, NaiveDate, Utc};
@@ -46,6 +46,23 @@ impl<Database> PgCampaignRepo<Database> {
 
 fn decode(message: &'static str) -> sqlx::Error {
     sqlx::Error::Decode(message.into())
+}
+
+fn condition(text: &str) -> Result<StepCondition, sqlx::Error> {
+    match text {
+        "always" => Ok(StepCondition::Always),
+        "not_opened" => Ok(StepCondition::NotOpened),
+        "opened" => Ok(StepCondition::Opened),
+        _ => Err(decode("unknown step condition")),
+    }
+}
+
+fn condition_text(condition: StepCondition) -> &'static str {
+    match condition {
+        StepCondition::Always => "always",
+        StepCondition::NotOpened => "not_opened",
+        StepCondition::Opened => "opened",
+    }
 }
 
 fn count(value: i64) -> u64 {
@@ -327,13 +344,13 @@ where
 
     async fn steps(&self, id: Uuid) -> Result<Vec<Step>, Self::Error> {
         Ok(sqlx::query!(
-            "SELECT id, position, delay_minutes, subject, body_html, body_text, body_macro FROM campaign_steps WHERE campaign_id = $1 ORDER BY position",
+            "SELECT id, position, delay_minutes, subject, body_html, body_text, body_macro, send_condition FROM campaign_steps WHERE campaign_id = $1 ORDER BY position",
             id
         )
         .fetch_all(&self.pool)
         .await?
         .into_iter()
-        .map(|row| Step {
+        .map(|row| Ok(Step {
             id: row.id,
             position: row.position as u16,
             delay_minutes: row.delay_minutes as u32,
@@ -341,8 +358,9 @@ where
             body_html: row.body_html,
             body_text: row.body_text,
             body_macro: row.body_macro,
-        })
-        .collect())
+            condition: condition(&row.send_condition)?,
+        }))
+        .collect::<Result<_, sqlx::Error>>()?)
     }
 
     #[tracing::instrument(skip_all, err)]
@@ -389,18 +407,20 @@ where
             match step.id {
                 Some(step_id) => {
                     sqlx::query!(
-                        "UPDATE campaign_steps SET position = $2, delay_minutes = $3, subject = $4, body_html = $5, body_text = $6, body_macro = $7, updated_at = now() WHERE id = $1",
+                        "UPDATE campaign_steps SET position = $2, delay_minutes = $3, subject = $4, body_html = $5, body_text = $6, body_macro = $7, send_condition = $8, updated_at = now() WHERE id = $1",
                         step_id, position, step.delay_minutes as i32, &step.subject,
                         &step.body_html, step.body_text.as_deref(), step.body_macro.as_deref(),
+                        condition_text(step.condition),
                     )
                     .execute(&mut *tx)
                     .await?;
                 }
                 None => {
                     sqlx::query!(
-                        "INSERT INTO campaign_steps (id, campaign_id, position, delay_minutes, subject, body_html, body_text, body_macro) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                        "INSERT INTO campaign_steps (id, campaign_id, position, delay_minutes, subject, body_html, body_text, body_macro, send_condition) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                         macro_uuid::generate_uuid_v7(), id, position, step.delay_minutes as i32,
                         &step.subject, &step.body_html, step.body_text.as_deref(), step.body_macro.as_deref(),
+                        condition_text(step.condition),
                     )
                     .execute(&mut *tx)
                     .await?;
@@ -771,6 +791,11 @@ where
                SELECT l.campaign_id AS "campaign_id!", l.row_id AS "row_id!", l.email AS "email!",
                       l.name, l.time_zone, l.next_position AS "next_position!",
                       l.send_attempts AS "send_attempts!",
+                      EXISTS (
+                          SELECT 1 FROM campaign_sends op JOIN campaign_steps ops ON ops.id = op.step_id
+                          WHERE op.campaign_id = l.campaign_id AND op.recipient_email = l.email
+                            AND op.opened_at IS NOT NULL AND ops.position < l.next_position
+                      ) AS "opened_earlier!",
                       f.id AS "first_id?", f.link_id AS "first_link_id?",
                       f.identity_id AS "first_identity_id?",
                       f.email_message_id AS "first_email_message_id?",
@@ -800,6 +825,7 @@ where
                 time_zone: row.time_zone,
                 position: row.next_position as u16,
                 send_attempts: row.send_attempts as u16,
+                opened_earlier: row.opened_earlier,
                 first: row.first_id.map(|_| FirstSend {
                     mailbox: mailbox(row.first_link_id, row.first_identity_id),
                     email_message_id: row.first_email_message_id,

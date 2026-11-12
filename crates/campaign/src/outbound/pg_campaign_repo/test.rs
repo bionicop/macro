@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::{CampaignBlueprint, MAX_SEND_ATTEMPTS};
+use crate::domain::models::{CampaignBlueprint, MAX_SEND_ATTEMPTS, StepCondition};
 use chrono::Duration;
 use databases::domain::models::ColumnProtection;
 use databases::domain::provisioning::{ProvisionedColumn, StorageBlueprint};
@@ -36,6 +36,7 @@ fn step(subject: &str) -> StepInput {
         body_html: "<p>Hi</p>".into(),
         body_text: None,
         body_macro: None,
+        condition: StepCondition::Always,
     }
 }
 
@@ -525,4 +526,78 @@ async fn daily_stats_cut_days_in_the_requested_zone(pool: PgPool) {
             .unwrap()
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_steps_condition_is_kept_and_defaults_to_always(pool: PgPool) {
+    let f = fixture(&pool).await;
+    assert!(
+        f.repo
+            .steps(f.campaign_id)
+            .await
+            .unwrap()
+            .iter()
+            .all(|step| step.condition == StepCondition::Always)
+    );
+    let nudge = StepInput {
+        id: Some(f.steps[1]),
+        condition: StepCondition::NotOpened,
+        ..step("")
+    };
+    let thanks = StepInput {
+        condition: StepCondition::Opened,
+        ..step("Thanks")
+    };
+    assert_eq!(
+        f.repo
+            .replace_steps(f.campaign_id, &[step("Hello"), nudge, thanks])
+            .await
+            .unwrap(),
+        StepsOutcome::Replaced
+    );
+    let conditions: Vec<_> = f
+        .repo
+        .steps(f.campaign_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|step| step.condition)
+        .collect();
+    assert_eq!(
+        conditions,
+        [StepCondition::Always, StepCondition::NotOpened, StepCondition::Opened]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn due_recipients_report_whether_an_earlier_email_was_opened(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let row_id = enrolled(&pool, &f).await;
+    let reserved = reservation(&f, row_id);
+    f.repo.reserve(&reserved).await.unwrap();
+    let due = Utc::now() - Duration::minutes(1);
+    let sent = SendRecord::Sent {
+        email_message_id: None,
+        rfc_message_id: None,
+    };
+    f.repo
+        .finalize(
+            Some((reserved.id, sent)),
+            f.campaign_id,
+            row_id,
+            1,
+            RecipientUpdate::Advance { position: 2, at: Some(due) },
+        )
+        .await
+        .unwrap();
+    let now = Utc::now();
+    let unopened = f.repo.claim_due(now, now + Duration::minutes(1), 10).await.unwrap();
+    assert_eq!(unopened.len(), 1);
+    assert_eq!(unopened[0].position, 2);
+    assert!(!unopened[0].opened_earlier);
+    f.repo.record_open(reserved.id).await.unwrap();
+    let later = now + Duration::minutes(2);
+    let opened = f.repo.claim_due(later, later + Duration::minutes(1), 10).await.unwrap();
+    assert_eq!(opened.len(), 1);
+    assert!(opened[0].opened_earlier);
 }

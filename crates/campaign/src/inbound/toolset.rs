@@ -12,7 +12,7 @@ mod read;
 mod send;
 
 use crate::domain::models::{
-    CampaignError, CampaignSettings, CampaignSharing, Sender, SenderMailbox, Step, StepInput,
+    CampaignError, CampaignSettings, CampaignSharing, Sender, SenderMailbox, Step, StepCondition, StepInput,
 };
 use crate::domain::service::CampaignService;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
@@ -230,6 +230,45 @@ pub struct ToolStep {
     pub subject: String,
     /// The body as HTML, with the same merge fields.
     pub body_html: String,
+    /// When to send this email to a recipient, judged when it comes due:
+    /// "always" (the default), "not_opened" (only if they have opened none
+    /// of the earlier emails, e.g. a nudge) or "opened" (only if they opened
+    /// an earlier one). A step whose condition is not met is skipped.
+    #[serde(default)]
+    pub condition: ToolCondition,
+}
+
+/// A step's send condition, as the model writes it.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolCondition {
+    /// Send to everyone still in the sequence.
+    #[default]
+    Always,
+    /// Send only if no earlier email was opened.
+    NotOpened,
+    /// Send only if an earlier email was opened.
+    Opened,
+}
+
+impl From<ToolCondition> for StepCondition {
+    fn from(condition: ToolCondition) -> Self {
+        match condition {
+            ToolCondition::Always => Self::Always,
+            ToolCondition::NotOpened => Self::NotOpened,
+            ToolCondition::Opened => Self::Opened,
+        }
+    }
+}
+
+impl From<StepCondition> for ToolCondition {
+    fn from(condition: StepCondition) -> Self {
+        match condition {
+            StepCondition::Always => Self::Always,
+            StepCondition::NotOpened => Self::NotOpened,
+            StepCondition::Opened => Self::Opened,
+        }
+    }
 }
 
 impl From<&Step> for ToolStep {
@@ -239,6 +278,7 @@ impl From<&Step> for ToolStep {
             delay_minutes: step.delay_minutes,
             subject: step.subject.clone(),
             body_html: step.body_html.clone(),
+            condition: step.condition.into(),
         }
     }
 }
@@ -252,6 +292,7 @@ impl From<ToolStep> for StepInput {
             body_html: step.body_html,
             body_text: None,
             body_macro: None,
+            condition: step.condition.into(),
         }
     }
 }
