@@ -28,8 +28,8 @@ pub fn recipients_csv(recipients: &[Recipient]) -> String {
             recipient.email.clone(),
             recipient.name.clone().unwrap_or_default(),
             recipient.state.as_str().to_string(),
-            // Positions are zero-based; people count steps from one.
-            (u32::from(recipient.next_position) + 1).to_string(),
+            // Positions already count from one, like the steps people see.
+            recipient.next_position.to_string(),
             recipient.next_send_at.map(|at| at.to_rfc3339()).unwrap_or_default(),
             recipient.time_zone.clone().unwrap_or_default(),
             recipient.contact_id.map(|id| id.to_string()).unwrap_or_default(),
@@ -85,7 +85,7 @@ mod test {
         assert_eq!(
             csv,
             "email,name,state,next_step,next_send_at,time_zone,contact_id,enrolled_at\r\n\
-             ada@example.com,Ada Lovelace,active,2,2026-11-12T09:00:00+00:00,Europe/Oslo,,2026-11-11T08:30:00+00:00\r\n"
+             ada@example.com,Ada Lovelace,active,1,2026-11-12T09:00:00+00:00,Europe/Oslo,,2026-11-11T08:30:00+00:00\r\n"
         );
     }
 
