@@ -2,7 +2,7 @@
 
 use crate::domain::models::{
     AccessibleCampaign, CampaignError, DeliveryError, CampaignSettings, CampaignSharing, CampaignStats,
-    CreateCampaign, LaunchCampaign, LaunchOutcome, Recipients, Sender, Step, StepInput,
+    CreateCampaign, DailyRange, DailyStats, LaunchCampaign, LaunchOutcome, Recipients, Sender, Step, StepInput,
 };
 use crate::domain::export;
 use crate::domain::service::CampaignService;
@@ -109,6 +109,8 @@ where
         .route("/{id}/recipients/export", get(export_recipients::<P, E, A>))
         .route("/{id}/recipients/remove", post(remove_recipients::<P, E, A>))
         .route("/{id}/stats", get(stats::<P, E, A>))
+        .route("/{id}/stats/daily", get(daily_stats::<P, E, A>))
+        .route("/stats/daily", get(all_daily_stats::<P, E, A>))
         .with_state(state)
 }
 
@@ -645,6 +647,68 @@ pub async fn stats<P: CampaignService, E: EntityAccessService, A: MacroAuthoriza
         state
             .service
             .stats(receipt::<ViewAccessLevel, _, _>(&*state.access, auth, id).await?)
+            .await?,
+    ))
+}
+
+/// Date range and zone for a daily series.
+#[derive(serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DailyStatsQuery {
+    /// First day, inclusive, `YYYY-MM-DD`.
+    #[param(value_type = String, format = Date)]
+    pub from: chrono::NaiveDate,
+    /// Last day, inclusive, `YYYY-MM-DD`; at most 366 days after `from`.
+    #[param(value_type = String, format = Date)]
+    pub to: chrono::NaiveDate,
+    /// IANA zone the days are cut in; UTC when omitted.
+    pub tz: Option<String>,
+}
+
+impl DailyStatsQuery {
+    fn range(&self) -> Result<DailyRange, CampaignError> {
+        DailyRange::new(self.from, self.to, self.tz.as_deref())
+    }
+}
+
+/// Sent, opened, replied and bounced per day for one campaign.
+#[utoipa::path(get, path = "/campaigns/{id}/stats/daily", operation_id = "get_campaign_daily_stats",
+    params(("id" = Uuid, Path), DailyStatsQuery), responses((status = 200, body = DailyStats)))]
+pub async fn daily_stats<P: CampaignService, E: EntityAccessService, A: MacroAuthorizationService>(
+    auth: MacroAuthorizationExtractor<A, UserOrInternal>,
+    State(state): State<CampaignRouterState<P, E, A>>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<DailyStatsQuery>,
+) -> Result<Json<DailyStats>, CampaignError> {
+    let range = query.range()?;
+    Ok(Json(
+        state
+            .service
+            .daily_stats(
+                receipt::<ViewAccessLevel, _, _>(&*state.access, auth, id).await?,
+                range,
+            )
+            .await?,
+    ))
+}
+
+/// The daily series summed over every live campaign the caller can see.
+#[utoipa::path(get, path = "/campaigns/stats/daily", operation_id = "get_all_campaigns_daily_stats",
+    params(DailyStatsQuery), responses((status = 200, body = DailyStats)))]
+pub async fn all_daily_stats<
+    P: CampaignService,
+    E: EntityAccessService,
+    A: MacroAuthorizationService,
+>(
+    team: MacroUserTeamExtractorV2<MemberTeamRole, E, A>,
+    State(state): State<CampaignRouterState<P, E, A>>,
+    Query(query): Query<DailyStatsQuery>,
+) -> Result<Json<DailyStats>, CampaignError> {
+    let range = query.range()?;
+    Ok(Json(
+        state
+            .service
+            .all_daily_stats(team.entity_access_receipt, range)
             .await?,
     ))
 }

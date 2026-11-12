@@ -3,12 +3,12 @@
 
 use crate::domain::models::{
     Campaign, CampaignBlueprint, CampaignSettings, CampaignSharing, CampaignStats,
-    CampaignStatus, DueRecipient, Enrollment, FirstSend, Recipient, RecipientState,
+    CampaignStatus, DailyCounts, DailyRange, DueRecipient, Enrollment, FirstSend, Recipient, RecipientState,
     RecipientUpdate, Reservation, Reserved, SendRecord, SendStatus, Sender, SenderMailbox,
     SenderUsage, SendersOutcome, Step, StepInput, StepStats, StepsOutcome,
 };
 use crate::domain::ports::{CampaignRepo, SenderRepo};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use databases::domain::provisioning::DatabaseStorageProvisioner;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -650,6 +650,68 @@ where
             opened: steps.iter().map(|step| step.opened).sum(),
             steps,
         })
+    }
+
+    async fn daily_stats(
+        &self,
+        ids: &[Uuid],
+        range: &DailyRange,
+    ) -> Result<Vec<(NaiveDate, DailyCounts)>, Self::Error> {
+        // Each event is cut into days by its own timestamp, in the caller's
+        // zone; the half-open [lo, hi) bounds are the zone's midnights, so a
+        // DST day is 23 or 25 hours long rather than skewing its neighbours.
+        let rows: Vec<(NaiveDate, i64, i64, i64, i64)> = sqlx::query_as(
+            r#"WITH bounds AS (
+                   SELECT ($2::date)::timestamp AT TIME ZONE $4 AS lo,
+                          (($3::date) + 1)::timestamp AT TIME ZONE $4 AS hi
+               ), events AS (
+                   SELECT (s.sent_at AT TIME ZONE $4)::date AS day, 1 AS kind
+                   FROM campaign_sends s, bounds b
+                   WHERE s.campaign_id = ANY($1) AND s.status = 'sent'
+                     AND s.sent_at >= b.lo AND s.sent_at < b.hi
+                   UNION ALL
+                   SELECT (s.opened_at AT TIME ZONE $4)::date, 2
+                   FROM campaign_sends s, bounds b
+                   WHERE s.campaign_id = ANY($1)
+                     AND s.opened_at >= b.lo AND s.opened_at < b.hi
+                   UNION ALL
+                   SELECT (s.replied_at AT TIME ZONE $4)::date, 3
+                   FROM campaign_sends s, bounds b
+                   WHERE s.campaign_id = ANY($1)
+                     AND s.replied_at >= b.lo AND s.replied_at < b.hi
+                   UNION ALL
+                   SELECT (s.bounced_at AT TIME ZONE $4)::date, 4
+                   FROM campaign_sends s, bounds b
+                   WHERE s.campaign_id = ANY($1)
+                     AND s.bounced_at >= b.lo AND s.bounced_at < b.hi
+               )
+               SELECT day,
+                      count(*) FILTER (WHERE kind = 1),
+                      count(*) FILTER (WHERE kind = 2),
+                      count(*) FILTER (WHERE kind = 3),
+                      count(*) FILTER (WHERE kind = 4)
+               FROM events GROUP BY day ORDER BY day"#,
+        )
+        .bind(ids)
+        .bind(range.from)
+        .bind(range.to)
+        .bind(range.tz.name())
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|(day, sent, opened, replied, bounced)| {
+                (
+                    day,
+                    DailyCounts {
+                        sent: count(sent),
+                        opened: count(opened),
+                        replied: count(replied),
+                        bounced: count(bounced),
+                    },
+                )
+            })
+            .collect())
     }
 }
 

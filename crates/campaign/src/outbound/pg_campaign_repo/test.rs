@@ -437,3 +437,92 @@ async fn the_campaign_completes_when_nobody_is_left(pool: PgPool) {
     let campaign = f.repo.get_many(&[f.campaign_id]).await.unwrap();
     assert_eq!(campaign[0].status, CampaignStatus::Completed);
 }
+
+/// A send row with every event timestamp spelled out.
+#[allow(clippy::too_many_arguments)]
+async fn send_at(
+    pool: &PgPool,
+    f: &Fixture,
+    step: usize,
+    email: &str,
+    status: &str,
+    sent: Option<&str>,
+    opened: Option<&str>,
+    replied: Option<&str>,
+    bounced: Option<&str>,
+) {
+    let when = |text: Option<&str>| text.map(|t| t.parse::<DateTime<Utc>>().unwrap());
+    sqlx::query(
+        "INSERT INTO campaign_sends
+             (id, campaign_id, step_id, recipient_email, status, sent_at, opened_at, replied_at, bounced_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(f.campaign_id)
+    .bind(f.steps[step])
+    .bind(email)
+    .bind(status)
+    .bind(when(sent))
+    .bind(when(opened))
+    .bind(when(replied))
+    .bind(when(bounced))
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+fn range(from: &str, to: &str, tz: &str) -> DailyRange {
+    DailyRange::new(from.parse().unwrap(), to.parse().unwrap(), Some(tz)).unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn daily_stats_cut_days_in_the_requested_zone(pool: PgPool) {
+    let f = fixture(&pool).await;
+    // 18:00Z and 19:00Z on 10 March: one UTC day, but 23:30 and 00:30 in Kolkata.
+    send_at(&pool, &f, 0, "a@example.com", "sent", Some("2026-03-10T18:00:00Z"), Some("2026-03-10T18:10:00Z"), None, None).await;
+    send_at(&pool, &f, 0, "b@example.com", "sent", Some("2026-03-10T19:00:00Z"), None, Some("2026-03-11T05:00:00Z"), None).await;
+    // Failed sends are not sent; a bounce counts on its own day.
+    send_at(&pool, &f, 0, "c@example.com", "failed", None, None, None, Some("2026-03-11T10:00:00Z")).await;
+    // Outside the range.
+    send_at(&pool, &f, 0, "d@example.com", "sent", Some("2026-03-01T10:00:00Z"), None, None, None).await;
+
+    let utc = f
+        .repo
+        .daily_stats(&[f.campaign_id], &range("2026-03-10", "2026-03-11", "UTC"))
+        .await
+        .unwrap();
+    let day = |rows: &[(chrono::NaiveDate, DailyCounts)], date: &str| {
+        rows.iter().find(|(d, _)| d.to_string() == date).map(|(_, c)| *c)
+    };
+    assert_eq!(
+        day(&utc, "2026-03-10"),
+        Some(DailyCounts { sent: 2, opened: 1, replied: 0, bounced: 0 })
+    );
+    assert_eq!(
+        day(&utc, "2026-03-11"),
+        Some(DailyCounts { sent: 0, opened: 0, replied: 1, bounced: 1 })
+    );
+
+    let kolkata = f
+        .repo
+        .daily_stats(&[f.campaign_id], &range("2026-03-10", "2026-03-11", "Asia/Kolkata"))
+        .await
+        .unwrap();
+    assert_eq!(
+        day(&kolkata, "2026-03-10"),
+        Some(DailyCounts { sent: 1, opened: 1, replied: 0, bounced: 0 })
+    );
+    assert_eq!(
+        day(&kolkata, "2026-03-11"),
+        Some(DailyCounts { sent: 1, opened: 0, replied: 1, bounced: 1 })
+    );
+
+    // Another campaign's id sees none of it.
+    assert!(
+        f.repo
+            .daily_stats(&[Uuid::now_v7()], &range("2026-03-10", "2026-03-11", "UTC"))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

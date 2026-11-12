@@ -1,13 +1,13 @@
 //! Driven contracts: persistence and the CRM contact directory.
 
 use super::models::{
-    Campaign, CampaignBlueprint, CampaignSettings, CampaignSharing, CampaignStats,
+    Campaign, CampaignBlueprint, CampaignSettings, DailyCounts, DailyRange, CampaignSharing, CampaignStats,
     CampaignStatus, ContactAddress, Delivered, DeliveryError, DueRecipient, EncryptedSecret,
     Enrollment, IdentityCredentials, Mailbox, OutboundEmail, Recipient, RecipientUpdate,
     Reservation, Reserved, Secret, SendRecord, Sender, SenderUsage, SendersOutcome, Step,
     StepInput, StepsOutcome, StoredIdentity,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use databases::domain::models::RowId;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::channel_share_permission::{
@@ -122,6 +122,13 @@ pub trait CampaignRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<u64, Self::Error>> + Send;
     /// Recipient and send counts.
     fn stats(&self, id: Uuid) -> impl Future<Output = Result<CampaignStats, Self::Error>> + Send;
+    /// Sent, opened, replied and bounced counts per day over these campaigns,
+    /// cut in the range's zone. Days with nothing are absent.
+    fn daily_stats(
+        &self,
+        ids: &[Uuid],
+        range: &DailyRange,
+    ) -> impl Future<Output = Result<Vec<(NaiveDate, DailyCounts)>, Self::Error>> + Send;
 }
 
 /// What the sender worker needs beyond editing: leasing due recipients and

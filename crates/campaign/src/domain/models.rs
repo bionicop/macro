@@ -1,6 +1,6 @@
 //! Campaign values crossing the service boundary.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use databases::domain::{
     models::{ColumnId, DatabaseId, RowId, TableId},
     provisioning::StorageBlueprint,
@@ -335,6 +335,108 @@ pub struct CampaignStats {
     pub opened: u64,
     /// Per-step counts, in sequence order.
     pub steps: Vec<StepStats>,
+}
+
+/// Longest range a daily series may cover.
+pub const MAX_DAILY_DAYS: i64 = 366;
+
+/// Counts for one calendar day, bucketed in the requested time zone.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyCounts {
+    /// Emails sent that day.
+    pub sent: u64,
+    /// Sent emails first opened that day.
+    pub opened: u64,
+    /// Replies received that day.
+    pub replied: u64,
+    /// Bounces recorded that day.
+    pub bounced: u64,
+}
+
+/// One day of a daily series.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyStatsDay {
+    /// Calendar date in the requested time zone, YYYY-MM-DD.
+    #[schema(value_type = String, format = Date)]
+    pub date: NaiveDate,
+    /// Emails sent.
+    pub sent: u64,
+    /// Sent emails first opened.
+    pub opened: u64,
+    /// Replies received.
+    pub replied: u64,
+    /// Bounces recorded.
+    pub bounced: u64,
+}
+
+/// Activity per day over a range, one entry per date including zero days.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyStats {
+    /// Days in ascending order.
+    pub days: Vec<DailyStatsDay>,
+}
+
+/// A validated inclusive date range and the zone its days are cut in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DailyRange {
+    /// First day, inclusive.
+    pub from: NaiveDate,
+    /// Last day, inclusive.
+    pub to: NaiveDate,
+    /// Zone whose midnights bound each day.
+    pub tz: chrono_tz::Tz,
+}
+
+impl DailyRange {
+    /// From on or before to, at most 366 days, and a real IANA zone
+    /// (UTC when none is given).
+    pub fn new(from: NaiveDate, to: NaiveDate, tz: Option<&str>) -> Result<Self, CampaignError> {
+        if from > to {
+            return Err(CampaignError::Invalid("Start the range on or before its end"));
+        }
+        if (to - from).num_days() + 1 > MAX_DAILY_DAYS {
+            return Err(CampaignError::Invalid("Ask for at most 366 days at a time"));
+        }
+        let tz = match tz.map(str::trim).filter(|name| !name.is_empty()) {
+            None => chrono_tz::Tz::UTC,
+            Some(name) => name.parse().map_err(|_| {
+                CampaignError::Invalid("Use an IANA time zone such as America/New_York")
+            })?,
+        };
+        Ok(Self { from, to, tz })
+    }
+
+    /// Fill every date in the range, in order, with the counts found for it
+    /// (zero where there are none). Counts outside the range are ignored.
+    pub fn fill(&self, found: impl IntoIterator<Item = (NaiveDate, DailyCounts)>) -> DailyStats {
+        let mut totals = std::collections::BTreeMap::<NaiveDate, DailyCounts>::new();
+        for (date, counts) in found {
+            let total = totals.entry(date).or_default();
+            total.sent += counts.sent;
+            total.opened += counts.opened;
+            total.replied += counts.replied;
+            total.bounced += counts.bounced;
+        }
+        let days = self
+            .from
+            .iter_days()
+            .take_while(|date| *date <= self.to)
+            .map(|date| {
+                let counts = totals.get(&date).copied().unwrap_or_default();
+                DailyStatsDay {
+                    date,
+                    sent: counts.sent,
+                    opened: counts.opened,
+                    replied: counts.replied,
+                    bounced: counts.bounced,
+                }
+            })
+            .collect();
+        DailyStats { days }
+    }
 }
 
 /// Counts for one step.

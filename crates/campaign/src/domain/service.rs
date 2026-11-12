@@ -7,7 +7,7 @@ use super::events::{
 };
 use super::models::{
     AccessibleCampaign, Campaign, CampaignBlueprint, CampaignError, CampaignSettings,
-    CampaignSharing, CampaignStats, CampaignStatus, CreateCampaign, Enrollment, LaunchCampaign,
+    CampaignSharing, CampaignStats, CampaignStatus, CreateCampaign, DailyRange, DailyStats, Enrollment, LaunchCampaign,
     LaunchOutcome, Recipient, Recipients, Sender, SendersOutcome, Step, StepInput, StepsOutcome,
 };
 use super::ports::{CampaignRepo, ContactDirectory};
@@ -196,6 +196,19 @@ pub trait CampaignService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<CampaignStats, CampaignError>> + Send;
+    /// Sent, opened, replied and bounced per day for one campaign.
+    fn daily_stats(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        range: DailyRange,
+    ) -> impl Future<Output = Result<DailyStats, CampaignError>> + Send;
+    /// The same series summed over every live campaign the caller can see in
+    /// their team.
+    fn all_daily_stats(
+        &self,
+        team: EntityAccessReceipt<MemberTeamRole>,
+        range: DailyRange,
+    ) -> impl Future<Output = Result<DailyStats, CampaignError>> + Send;
 }
 
 /// Campaign policy, composed with the database, access and CRM services.
@@ -1139,12 +1152,45 @@ where
         let campaign = self.live(&receipt).await?;
         self.repo.stats(campaign.id).await.map_err(storage)
     }
+
+    async fn daily_stats(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        range: DailyRange,
+    ) -> Result<DailyStats, CampaignError> {
+        let campaign = self.live(&receipt).await?;
+        let found = self
+            .repo
+            .daily_stats(&[campaign.id], &range)
+            .await
+            .map_err(storage)?;
+        Ok(range.fill(found))
+    }
+
+    async fn all_daily_stats(
+        &self,
+        team: EntityAccessReceipt<MemberTeamRole>,
+        range: DailyRange,
+    ) -> Result<DailyStats, CampaignError> {
+        let ids: Vec<Uuid> = self
+            .list(team)
+            .await?
+            .into_iter()
+            .map(|accessible| accessible.campaign.id)
+            .collect();
+        let found = self
+            .repo
+            .daily_stats(&ids, &range)
+            .await
+            .map_err(storage)?;
+        Ok(range.fill(found))
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::domain::models::SenderMailbox;
+    use crate::domain::models::{DailyCounts, SenderMailbox};
 
     fn step(id: Option<Uuid>) -> StepInput {
         StepInput {
@@ -1177,6 +1223,61 @@ mod test {
         assert!(validate_senders(&[sender(50), sender(60)]).is_err());
         assert!(validate_senders(&[sender(0)]).is_err());
         assert!(validate_senders(&[sender(2001)]).is_err());
+    }
+
+    fn date(text: &str) -> chrono::NaiveDate {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn daily_ranges_are_ordered_capped_and_zoned() {
+        let range = |from: &str, to: &str, tz| DailyRange::new(date(from), date(to), tz);
+        assert!(range("2026-03-10", "2026-03-10", None).is_ok());
+        assert_eq!(
+            range("2026-03-10", "2026-03-10", None).unwrap().tz,
+            chrono_tz::Tz::UTC
+        );
+        assert!(range("2026-03-11", "2026-03-10", None).is_err());
+        // 366 days inclusive is the cap (2024 is a leap year).
+        assert!(range("2024-01-01", "2024-12-31", None).is_ok());
+        assert!(range("2024-01-01", "2025-01-01", None).is_err());
+        assert!(range("2026-01-01", "2026-01-02", Some("Mars/Olympus")).is_err());
+        assert_eq!(
+            range("2026-01-01", "2026-01-02", Some("Asia/Kolkata")).unwrap().tz,
+            chrono_tz::Asia::Kolkata
+        );
+    }
+
+    #[test]
+    fn daily_series_includes_zero_days_and_ignores_strays() {
+        let range = DailyRange::new(date("2026-03-09"), date("2026-03-12"), None).unwrap();
+        let counts = |sent, opened, replied, bounced| DailyCounts {
+            sent,
+            opened,
+            replied,
+            bounced,
+        };
+        let stats = range.fill([
+            (date("2026-03-10"), counts(5, 2, 1, 0)),
+            (date("2026-03-12"), counts(0, 0, 0, 3)),
+            (date("2026-03-20"), counts(9, 9, 9, 9)),
+        ]);
+        let dates: Vec<_> = stats.days.iter().map(|day| day.date).collect();
+        assert_eq!(
+            dates,
+            [date("2026-03-09"), date("2026-03-10"), date("2026-03-11"), date("2026-03-12")]
+        );
+        let sent: Vec<_> = stats.days.iter().map(|day| day.sent).collect();
+        assert_eq!(sent, [0, 5, 0, 0]);
+        assert_eq!(stats.days[1].opened, 2);
+        assert_eq!(stats.days[1].replied, 1);
+        assert_eq!(stats.days[3].bounced, 3);
+        assert_eq!(stats.days[2], range.fill([]).days[2]);
+        let json = serde_json::to_value(&stats).unwrap();
+        assert_eq!(
+            json["days"][1],
+            serde_json::json!({"date": "2026-03-10", "sent": 5, "opened": 2, "replied": 1, "bounced": 0})
+        );
     }
 
     #[test]
