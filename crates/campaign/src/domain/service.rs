@@ -8,7 +8,8 @@ use super::events::{
 use super::models::{
     AccessibleCampaign, Campaign, CampaignBlueprint, CampaignError, CampaignSettings,
     CampaignSharing, CampaignStats, CampaignStatus, CreateCampaign, DailyRange, DailyStats, Enrollment, LaunchCampaign,
-    LaunchOutcome, Recipient, Recipients, Sender, SendersOutcome, Step, StepInput, StepsOutcome,
+    LaunchOutcome, Recipient, Recipients, ReplyDraft, ReplyDraftOutcome, ReplyDraftStatus,
+    ReplyDraftUpdate, Sender, SendersOutcome, Step, StepInput, StepsOutcome,
 };
 use super::ports::{CampaignRepo, ContactDirectory};
 use super::schedule::{SendWindow, parse_zone};
@@ -196,6 +197,20 @@ pub trait CampaignService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<CampaignStats, CampaignError>> + Send;
+    /// Draft replies queued for the owner, newest first, optionally of one
+    /// status.
+    fn reply_drafts(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        status: Option<ReplyDraftStatus>,
+    ) -> impl Future<Output = Result<Vec<ReplyDraft>, CampaignError>> + Send;
+    /// Edit a draft's subject or body, or dismiss it. Never sends it.
+    fn update_reply_draft(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        draft_id: Uuid,
+        update: ReplyDraftUpdate,
+    ) -> impl Future<Output = Result<ReplyDraft, CampaignError>> + Send;
     /// Sent, opened, replied and bounced per day for one campaign.
     fn daily_stats(
         &self,
@@ -1151,6 +1166,47 @@ where
     ) -> Result<CampaignStats, CampaignError> {
         let campaign = self.live(&receipt).await?;
         self.repo.stats(campaign.id).await.map_err(storage)
+    }
+
+    async fn reply_drafts(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        status: Option<ReplyDraftStatus>,
+    ) -> Result<Vec<ReplyDraft>, CampaignError> {
+        let campaign = self.live(&receipt).await?;
+        self.repo
+            .reply_drafts(campaign.id, status)
+            .await
+            .map_err(storage)
+    }
+
+    async fn update_reply_draft(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        draft_id: Uuid,
+        update: ReplyDraftUpdate,
+    ) -> Result<ReplyDraft, CampaignError> {
+        if update.subject.is_none() && update.body.is_none() && update.status.is_none() {
+            return Err(CampaignError::Invalid("Give a subject, a body or a status"));
+        }
+        if update.subject.as_ref().is_some_and(|s| s.len() > 1000)
+            || update.body.as_ref().is_some_and(|b| b.len() > 100_000)
+        {
+            return Err(CampaignError::Invalid("The draft is too long"));
+        }
+        let campaign = self.live(&receipt).await?;
+        match self
+            .repo
+            .update_reply_draft(campaign.id, draft_id, &update)
+            .await
+            .map_err(storage)?
+        {
+            ReplyDraftOutcome::Updated(draft) => Ok(draft),
+            ReplyDraftOutcome::NotFound => Err(CampaignError::NotFound),
+            ReplyDraftOutcome::Closed(_) => Err(CampaignError::Conflict(
+                "This draft was already sent or dismissed",
+            )),
+        }
     }
 
     async fn daily_stats(

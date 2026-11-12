@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_reply_drafts SET draft_subject = $2, draft_body = $3, status = 'ready', updated_at = now()\n             WHERE id = $1 AND status = 'pending' AND btrim($3) <> ''",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "733d62d4ddc593fa1d3f70223b4698634fea7ff3e01eb16e33f23c4f41ff9bd2"
+}

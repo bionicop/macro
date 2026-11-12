@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.id, d.campaign_id, d.recipient_email, d.inbound_subject, d.inbound_text,\n                      se.subject AS sent_subject\n               FROM campaign_reply_drafts d\n               JOIN campaign_entities c ON c.id = d.campaign_id\n               LEFT JOIN campaign_sends se ON se.id = d.send_id\n               WHERE d.status = 'pending' AND c.auto_draft_replies AND c.trashed_at IS NULL\n                 AND (d.updated_at = d.created_at OR d.updated_at < now() - interval '1 hour')\n               ORDER BY d.updated_at, d.id\n               LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "campaign_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "recipient_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "inbound_subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "inbound_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "sent_subject",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "bf5afe66a2847cb18bc629919ab35108b361c10d05379de7ee36dfb83a987ff2"
+}

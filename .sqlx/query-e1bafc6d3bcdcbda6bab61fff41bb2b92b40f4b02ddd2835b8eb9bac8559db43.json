@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT c.id, c.team_id, c.database_id, c.table_id, c.primary_column_id,\n                      c.name, c.user_id, c.status, c.time_zone, c.time_zone_column_id,\n                      c.window_start_minute, c.window_end_minute, c.send_days,\n                      c.stop_on_reply, c.track_opens, c.launched_at, c.created_at, c.trashed_at,\n                      EXISTS (SELECT 1 FROM entity_access ea WHERE ea.entity_id = c.id\n                        AND ea.entity_type = 'campaign' AND ea.source_type = 'team'\n                        AND ea.source_id = c.team_id::text) AS \"team_shared!\"\n               FROM campaign_entities c\n               WHERE c.id = ANY($1) ORDER BY c.id",
+  "query": "SELECT c.id, c.team_id, c.database_id, c.table_id, c.primary_column_id,\n                      c.name, c.user_id, c.status, c.time_zone, c.time_zone_column_id,\n                      c.window_start_minute, c.window_end_minute, c.send_days,\n                      c.stop_on_reply, c.track_opens, c.auto_draft_replies, c.launched_at, c.created_at, c.trashed_at,\n                      EXISTS (SELECT 1 FROM entity_access ea WHERE ea.entity_id = c.id\n                        AND ea.entity_type = 'campaign' AND ea.source_type = 'team'\n                        AND ea.source_id = c.team_id::text) AS \"team_shared!\"\n               FROM campaign_entities c\n               WHERE c.id = ANY($1) ORDER BY c.id",
   "describe": {
     "columns": [
       {
@@ -80,21 +80,26 @@
       },
       {
         "ordinal": 15,
+        "name": "auto_draft_replies",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
         "name": "launched_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "trashed_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "team_shared!",
         "type_info": "Bool"
       }
@@ -120,11 +125,12 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       true,
       null
     ]
   },
-  "hash": "770addaa9ea176403a1d1ad048de97810ba512419e37da64c25735d0b873460e"
+  "hash": "e1bafc6d3bcdcbda6bab61fff41bb2b92b40f4b02ddd2835b8eb9bac8559db43"
 }

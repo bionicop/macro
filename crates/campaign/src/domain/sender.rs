@@ -8,9 +8,9 @@ use super::links::{LinkAction, SignedLinks};
 use super::models::{
     Campaign, CampaignError, CampaignStatus, DeliveryError, DueRecipient, FirstSend, Mailbox,
     MAX_SEND_ATTEMPTS, OutboundEmail, RecipientUpdate, Reservation, SendRecord, SendStatus,
-    SenderMailbox, SenderUsage, Step,
+    ReplyDraftRequest, ReplyDraftText, SenderMailbox, SenderUsage, Step,
 };
-use super::ports::{ContactDirectory, IdentityRepo, Outbox, SecretCipher, SenderRepo};
+use super::ports::{ContactDirectory, IdentityRepo, Outbox, ReplyDrafter, SecretCipher, SenderRepo};
 use super::schedule::{SendWindow, parse_zone};
 use super::service::{CampaignServiceImpl, storage};
 use super::template::{self, MergeFields};
@@ -53,6 +53,31 @@ pub struct CampaignSender<R, D, A, C, B, IR, Ci, O> {
     identities: Arc<IdentityServiceImpl<IR, Ci, O>>,
     links: Option<SignedLinks>,
     limits: SenderLimits,
+    drafter: Option<Arc<dyn ReplyDrafter>>,
+}
+
+/// Queued replies written per maintenance pass.
+const DRAFTS_PER_PASS: u32 = 20;
+
+/// Ask the drafter for each request. Text worth storing is returned; None (no
+/// text, a blank body, or a failure) defers the draft without stopping the pass.
+async fn write_drafts(
+    drafter: &dyn ReplyDrafter,
+    requests: Vec<ReplyDraftRequest>,
+) -> Vec<(Uuid, Option<ReplyDraftText>)> {
+    let mut out = Vec::with_capacity(requests.len());
+    for request in requests {
+        let text = match drafter.draft(&request).await {
+            Ok(Some(text)) if !text.body.trim().is_empty() => Some(text),
+            Ok(_) => None,
+            Err(error) => {
+                tracing::warn!(draft_id = %request.id, error = ?error, "reply draft failed");
+                None
+            }
+        };
+        out.push((request.id, text));
+    }
+    out
 }
 
 /// Which mailbox a recipient's step goes out from.
@@ -172,7 +197,38 @@ where
             identities,
             links,
             limits,
+            drafter: None,
         }
+    }
+
+    /// Write queued reply drafts with `drafter`. Without one, drafts stay
+    /// pending until a person or the agent toolset writes them.
+    #[must_use]
+    pub fn with_reply_drafter(mut self, drafter: Arc<dyn ReplyDrafter>) -> Self {
+        self.drafter = Some(drafter);
+        self
+    }
+
+    /// Fill queued reply drafts. A draft is only ever stored for review;
+    /// nothing here sends mail. A failure defers that draft, not the pass.
+    async fn draft_replies(&self) -> Result<(), CampaignError> {
+        let Some(drafter) = &self.drafter else {
+            return Ok(());
+        };
+        let pending = self
+            .repo()
+            .pending_reply_drafts(DRAFTS_PER_PASS)
+            .await
+            .map_err(storage)?;
+        for (id, text) in write_drafts(drafter.as_ref(), pending).await {
+            match text {
+                Some(text) => {
+                    self.repo().fill_reply_draft(id, &text).await.map_err(storage)?;
+                }
+                None => self.repo().defer_reply_draft(id).await.map_err(storage)?,
+            }
+        }
+        Ok(())
     }
 
     fn repo(&self) -> &R {
@@ -190,6 +246,9 @@ where
         let bounced = self.repo().detect_bounces(since).await.map_err(storage)?;
         if replied + bounced > 0 {
             tracing::info!(replied, bounced, "campaign responses recorded");
+        }
+        if let Err(error) = self.draft_replies().await {
+            tracing::warn!(error = ?error, "reply drafting pass failed");
         }
         let ids = self
             .repo()
@@ -588,6 +647,50 @@ where
 mod test {
     use super::*;
     use crate::domain::models::Sender;
+    use crate::domain::ports::BoxFuture;
+
+    /// Answers by subject: "auto" gets nothing, "boom" fails, "blank" is empty.
+    struct Fake;
+
+    impl ReplyDrafter for Fake {
+        fn draft<'a>(
+            &'a self,
+            request: &'a ReplyDraftRequest,
+        ) -> BoxFuture<'a, Result<Option<ReplyDraftText>, CampaignError>> {
+            Box::pin(async move {
+                match request.inbound_subject.as_deref() {
+                    Some("auto") => Ok(None),
+                    Some("boom") => Err(CampaignError::Unavailable("down")),
+                    Some("blank") => Ok(Some(ReplyDraftText { subject: String::new(), body: " ".into() })),
+                    _ => Ok(Some(ReplyDraftText {
+                        subject: "Re".into(),
+                        body: format!("Hi {}", request.recipient_email),
+                    })),
+                }
+            })
+        }
+    }
+
+    fn request(subject: &str) -> ReplyDraftRequest {
+        ReplyDraftRequest {
+            id: Uuid::new_v4(),
+            campaign_id: Uuid::new_v4(),
+            recipient_email: "ada@example.com".into(),
+            sent_subject: None,
+            inbound_subject: Some(subject.into()),
+            inbound_text: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn only_real_text_is_stored_and_failures_defer_the_draft() {
+        let requests = vec![request("ok"), request("auto"), request("boom"), request("blank")];
+        let ids: Vec<_> = requests.iter().map(|r| r.id).collect();
+        let out = write_drafts(&Fake, requests).await;
+        assert_eq!(out.iter().map(|(id, _)| *id).collect::<Vec<_>>(), ids);
+        assert_eq!(out[0].1.as_ref().map(|t| t.body.as_str()), Some("Hi ada@example.com"));
+        assert!(out[1..].iter().all(|(_, text)| text.is_none()));
+    }
 
     fn slot(cap: u32, sent: u32, owned: bool) -> SenderUsage {
         SenderUsage {

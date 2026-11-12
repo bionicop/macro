@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, campaign_id, row_id, recipient_email, send_id, inbound_message_id,\n                      thread_id, inbound_subject, inbound_text, status, draft_subject,\n                      draft_body, created_at, updated_at\n               FROM campaign_reply_drafts\n               WHERE campaign_id = $1 AND ($2::text IS NULL OR status = $2)\n               ORDER BY created_at DESC, id\n               LIMIT 200",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "campaign_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "row_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "recipient_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "send_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "inbound_message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "inbound_subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "inbound_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "draft_subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "draft_body",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "790585768fe268e30fad66cb1ad0c5a23194ff89dd5847e93d1ee67c97e58a53"
+}

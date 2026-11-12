@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::{CampaignBlueprint, MAX_SEND_ATTEMPTS, StepCondition};
+use crate::domain::models::{CampaignBlueprint, MAX_SEND_ATTEMPTS, ReplyDraftAction, StepCondition};
 use chrono::Duration;
 use databases::domain::models::ColumnProtection;
 use databases::domain::provisioning::{ProvisionedColumn, StorageBlueprint};
@@ -600,4 +600,190 @@ async fn due_recipients_report_whether_an_earlier_email_was_opened(pool: PgPool)
     let opened = f.repo.claim_due(later, later + Duration::minutes(1), 10).await.unwrap();
     assert_eq!(opened.len(), 1);
     assert!(opened[0].opened_earlier);
+}
+
+/// One sent email to ada, then one inbound reply from her in the owner's inbox.
+async fn replied(pool: &PgPool, f: &Fixture) -> RowId {
+    let row_id = enrolled(pool, f).await;
+    let reserved = reservation(f, row_id);
+    f.repo.reserve(&reserved).await.unwrap();
+    let sent = SendRecord::Sent {
+        email_message_id: None,
+        rfc_message_id: None,
+    };
+    f.repo
+        .finalize(
+            Some((reserved.id, sent)),
+            f.campaign_id,
+            row_id,
+            1,
+            RecipientUpdate::Advance { position: 2, at: Some(Utc::now() + Duration::days(1)) },
+        )
+        .await
+        .unwrap();
+    let link = Uuid::now_v7();
+    let contact = Uuid::now_v7();
+    let thread = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+         VALUES ($1, $2, 'fa', 'owner@example.com', 'GMAIL')",
+    )
+    .bind(link)
+    .bind(OWNER)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, 'Ada@Example.com')")
+        .bind(contact)
+        .bind(link)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO email_threads (id, link_id) VALUES ($1, $2)")
+        .bind(thread)
+        .bind(link)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, subject, body_text, internal_date_ts, is_sent, is_draft)
+         VALUES ($1, $2, $3, $4, 'Re: Hello', 'Sounds good, tell me more', now() + interval '1 minute', false, false)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(thread)
+    .bind(link)
+    .bind(contact)
+    .execute(pool)
+    .await
+    .unwrap();
+    row_id
+}
+
+async fn auto_draft(f: &Fixture) -> bool {
+    f.repo.get_many(&[f.campaign_id]).await.unwrap().remove(0).settings.auto_draft_replies
+}
+
+async fn set_auto_draft(f: &Fixture, on: bool) {
+    let settings = CampaignSettings {
+        auto_draft_replies: on,
+        ..CampaignSettings::default()
+    };
+    f.repo.update_settings(f.campaign_id, &settings).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn auto_draft_replies_persists_and_defaults_off(pool: PgPool) {
+    let f = fixture(&pool).await;
+    assert!(!auto_draft(&f).await);
+    set_auto_draft(&f, true).await;
+    assert!(auto_draft(&f).await);
+    set_auto_draft(&f, false).await;
+    assert!(!auto_draft(&f).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reply_is_not_drafted_unless_the_campaign_asks(pool: PgPool) {
+    let f = fixture(&pool).await;
+    replied(&pool, &f).await;
+    assert_eq!(f.repo.detect_replies(Utc::now() - Duration::days(1)).await.unwrap(), 1);
+    assert!(f.repo.reply_drafts(f.campaign_id, None).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reply_queues_one_pending_draft(pool: PgPool) {
+    let f = fixture(&pool).await;
+    set_auto_draft(&f, true).await;
+    let row_id = replied(&pool, &f).await;
+    let since = Utc::now() - Duration::days(1);
+    assert_eq!(f.repo.detect_replies(since).await.unwrap(), 1);
+    // Detecting again finds nothing new and queues nothing twice.
+    assert_eq!(f.repo.detect_replies(since).await.unwrap(), 0);
+    let drafts = f.repo.reply_drafts(f.campaign_id, None).await.unwrap();
+    assert_eq!(drafts.len(), 1);
+    let draft = &drafts[0];
+    assert_eq!(draft.status, ReplyDraftStatus::Pending);
+    assert_eq!(draft.row_id, Some(row_id.into_uuid()));
+    assert_eq!(draft.recipient_email, "ada@example.com");
+    assert_eq!(draft.inbound_subject.as_deref(), Some("Re: Hello"));
+    assert_eq!(draft.inbound_text.as_deref(), Some("Sounds good, tell me more"));
+    assert!(draft.send_id.is_some() && draft.thread_id.is_some());
+    assert!(draft.draft_body.is_empty());
+    let pending = f.repo.pending_reply_drafts(10).await.unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].id, draft.id);
+    assert_eq!(pending[0].sent_subject.as_deref(), Some("Hello"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn editing_a_draft_makes_it_ready_and_dismissing_closes_it(pool: PgPool) {
+    let f = fixture(&pool).await;
+    set_auto_draft(&f, true).await;
+    replied(&pool, &f).await;
+    f.repo.detect_replies(Utc::now() - Duration::days(1)).await.unwrap();
+    let id = f.repo.reply_drafts(f.campaign_id, None).await.unwrap()[0].id;
+
+    let edit = ReplyDraftUpdate {
+        subject: Some("Re: Hello".into()),
+        body: Some("Happy to explain.".into()),
+        status: None,
+    };
+    let ReplyDraftOutcome::Updated(ready) = f.repo.update_reply_draft(f.campaign_id, id, &edit).await.unwrap()
+    else {
+        panic!("expected an update");
+    };
+    assert_eq!(ready.status, ReplyDraftStatus::Ready);
+    assert_eq!(ready.draft_body, "Happy to explain.");
+    assert!(f.repo.pending_reply_drafts(10).await.unwrap().is_empty());
+    let listed = f.repo.reply_drafts(f.campaign_id, Some(ReplyDraftStatus::Ready)).await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert!(f.repo.reply_drafts(f.campaign_id, Some(ReplyDraftStatus::Pending)).await.unwrap().is_empty());
+
+    // Clearing the body queues it for writing again.
+    let clear = ReplyDraftUpdate { body: Some(String::new()), ..Default::default() };
+    let ReplyDraftOutcome::Updated(cleared) = f.repo.update_reply_draft(f.campaign_id, id, &clear).await.unwrap()
+    else {
+        panic!("expected an update");
+    };
+    assert_eq!(cleared.status, ReplyDraftStatus::Pending);
+
+    let dismiss = ReplyDraftUpdate { status: Some(ReplyDraftAction::Dismissed), ..Default::default() };
+    let ReplyDraftOutcome::Updated(dismissed) =
+        f.repo.update_reply_draft(f.campaign_id, id, &dismiss).await.unwrap()
+    else {
+        panic!("expected an update");
+    };
+    assert_eq!(dismissed.status, ReplyDraftStatus::Dismissed);
+    // A dismissed draft is closed: no edit, no refill.
+    assert_eq!(
+        f.repo.update_reply_draft(f.campaign_id, id, &edit).await.unwrap(),
+        ReplyDraftOutcome::Closed(ReplyDraftStatus::Dismissed)
+    );
+    let text = ReplyDraftText { subject: String::new(), body: "late".into() };
+    assert!(!f.repo.fill_reply_draft(id, &text).await.unwrap());
+    // Unknown drafts and drafts of another campaign are not found.
+    assert_eq!(
+        f.repo.update_reply_draft(f.campaign_id, Uuid::now_v7(), &edit).await.unwrap(),
+        ReplyDraftOutcome::NotFound
+    );
+    assert_eq!(
+        f.repo.update_reply_draft(Uuid::now_v7(), id, &edit).await.unwrap(),
+        ReplyDraftOutcome::NotFound
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_filled_draft_is_ready_and_a_blank_one_is_refused(pool: PgPool) {
+    let f = fixture(&pool).await;
+    set_auto_draft(&f, true).await;
+    replied(&pool, &f).await;
+    f.repo.detect_replies(Utc::now() - Duration::days(1)).await.unwrap();
+    let id = f.repo.pending_reply_drafts(10).await.unwrap()[0].id;
+    let blank = ReplyDraftText { subject: String::new(), body: "  ".into() };
+    assert!(!f.repo.fill_reply_draft(id, &blank).await.unwrap());
+    let text = ReplyDraftText { subject: "Re: Hello".into(), body: "Thanks!".into() };
+    assert!(f.repo.fill_reply_draft(id, &text).await.unwrap());
+    assert!(!f.repo.fill_reply_draft(id, &text).await.unwrap());
+    let draft = f.repo.reply_drafts(f.campaign_id, None).await.unwrap().remove(0);
+    assert_eq!(draft.status, ReplyDraftStatus::Ready);
+    assert_eq!(draft.draft_body, "Thanks!");
 }

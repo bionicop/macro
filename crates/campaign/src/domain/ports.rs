@@ -1,10 +1,12 @@
 //! Driven contracts: persistence and the CRM contact directory.
 
 use super::models::{
+    CampaignError,
     Campaign, CampaignBlueprint, CampaignSettings, DailyCounts, DailyRange, CampaignSharing, CampaignStats,
     CampaignStatus, ContactAddress, Delivered, DeliveryError, DueRecipient, EncryptedSecret,
     Enrollment, IdentityCredentials, Mailbox, OutboundEmail, Recipient, RecipientUpdate,
-    Reservation, Reserved, Secret, SendRecord, Sender, SenderUsage, SendersOutcome, Step,
+    ReplyDraft, ReplyDraftOutcome, ReplyDraftRequest, ReplyDraftStatus, ReplyDraftText,
+    ReplyDraftUpdate, Reservation, Reserved, Secret, SendRecord, Sender, SenderUsage, SendersOutcome, Step,
     StepInput, StepsOutcome, StoredIdentity,
 };
 use chrono::{DateTime, NaiveDate, Utc};
@@ -122,6 +124,19 @@ pub trait CampaignRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<u64, Self::Error>> + Send;
     /// Recipient and send counts.
     fn stats(&self, id: Uuid) -> impl Future<Output = Result<CampaignStats, Self::Error>> + Send;
+    /// Reply drafts, newest first, optionally of one status.
+    fn reply_drafts(
+        &self,
+        id: Uuid,
+        status: Option<ReplyDraftStatus>,
+    ) -> impl Future<Output = Result<Vec<ReplyDraft>, Self::Error>> + Send;
+    /// Edit or dismiss one draft of the campaign.
+    fn update_reply_draft(
+        &self,
+        id: Uuid,
+        draft_id: Uuid,
+        update: &ReplyDraftUpdate,
+    ) -> impl Future<Output = Result<ReplyDraftOutcome, Self::Error>> + Send;
     /// Sent, opened, replied and bounced counts per day over these campaigns,
     /// cut in the range's zone. Days with nothing are absent.
     fn daily_stats(
@@ -176,6 +191,21 @@ pub trait SenderRepo: CampaignRepo {
         &self,
         since: DateTime<Utc>,
     ) -> impl Future<Output = Result<u64, Self::Error>> + Send;
+    /// The oldest queued replies still waiting for text, of live campaigns.
+    fn pending_reply_drafts(
+        &self,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<ReplyDraftRequest>, Self::Error>> + Send;
+    /// Note that a pending draft could not be written, so it is asked again
+    /// only later.
+    fn defer_reply_draft(&self, id: Uuid) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    /// Give a pending draft its text and mark it ready; false when it is no
+    /// longer pending (someone wrote or dismissed it meanwhile).
+    fn fill_reply_draft(
+        &self,
+        id: Uuid,
+        text: &ReplyDraftText,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
     /// Mark sends since `since` that a mail server bounced, stop their
     /// recipients and suppress the address for the team. Returns the sends
     /// marked.
@@ -280,4 +310,19 @@ pub trait ContactDirectory: Send + Sync + 'static {
         team_id: Uuid,
         contacts: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, ContactAddress>, Self::Error>> + Send;
+}
+
+/// A boxed future, so a writer can be held as a trait object.
+pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// Writes draft replies, for example with a language model. Its output is
+/// only ever stored as a draft for a person to review; nothing it writes is
+/// sent.
+pub trait ReplyDrafter: Send + Sync + 'static {
+    /// Text for the reply, or `None` when there is nothing worth drafting
+    /// (an auto-reply, an out-of-office), which leaves the draft pending.
+    fn draft<'a>(
+        &'a self,
+        request: &'a ReplyDraftRequest,
+    ) -> BoxFuture<'a, Result<Option<ReplyDraftText>, CampaignError>>;
 }

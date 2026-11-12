@@ -87,6 +87,10 @@ pub struct CampaignSettings {
     pub stop_on_reply: bool,
     /// Add an open-tracking pixel to sent mail.
     pub track_opens: bool,
+    /// Queue a draft reply, for the owner to review, when a recipient replies.
+    /// Drafts are never sent automatically.
+    #[serde(default)]
+    pub auto_draft_replies: bool,
 }
 
 impl Default for CampaignSettings {
@@ -99,6 +103,7 @@ impl Default for CampaignSettings {
             send_days: 0b001_1111,
             stop_on_reply: true,
             track_opens: true,
+            auto_draft_replies: false,
         }
     }
 }
@@ -230,6 +235,143 @@ pub struct StepInput {
     /// When to send; always when absent.
     #[serde(default)]
     pub condition: StepCondition,
+}
+
+/// Where a reply draft stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplyDraftStatus {
+    /// Queued; no text yet.
+    Pending,
+    /// Has text, waiting for review.
+    Ready,
+    /// Set aside; it is not sent.
+    Dismissed,
+    /// The reply went out.
+    Sent,
+}
+
+impl ReplyDraftStatus {
+    /// The stored text.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Ready => "ready",
+            Self::Dismissed => "dismissed",
+            Self::Sent => "sent",
+        }
+    }
+
+    /// Parse the stored text.
+    pub fn parse(text: &str) -> Option<Self> {
+        Some(match text {
+            "pending" => Self::Pending,
+            "ready" => Self::Ready,
+            "dismissed" => Self::Dismissed,
+            "sent" => Self::Sent,
+            _ => return None,
+        })
+    }
+}
+
+/// A draft reply to a recipient's reply, written for the owner to review.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplyDraft {
+    /// Stable identity.
+    pub id: Uuid,
+    /// The campaign.
+    pub campaign_id: Uuid,
+    /// The recipient's row; absent once the row is deleted.
+    #[schema(required = true)]
+    pub row_id: Option<Uuid>,
+    /// The recipient's address.
+    pub recipient_email: String,
+    /// The campaign email they replied to.
+    #[schema(required = true)]
+    pub send_id: Option<Uuid>,
+    /// Their reply in email.
+    pub inbound_message_id: Uuid,
+    /// The thread the reply belongs to.
+    #[schema(required = true)]
+    pub thread_id: Option<Uuid>,
+    /// Their reply's subject.
+    #[schema(required = true)]
+    pub inbound_subject: Option<String>,
+    /// The start of their reply's text.
+    #[schema(required = true)]
+    pub inbound_text: Option<String>,
+    /// Where the draft stands.
+    pub status: ReplyDraftStatus,
+    /// The drafted subject; empty until written.
+    pub draft_subject: String,
+    /// The drafted body; empty until written.
+    pub draft_body: String,
+    /// When the reply was queued.
+    pub created_at: DateTime<Utc>,
+    /// When it last changed.
+    pub updated_at: DateTime<Utc>,
+}
+
+/// What a person or agent can do to a draft besides write it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplyDraftAction {
+    /// Set the draft aside.
+    Dismissed,
+}
+
+/// An edit to a draft. Writing text makes a pending draft ready; clearing the
+/// body makes it pending again. A sent or dismissed draft cannot be changed.
+#[derive(Debug, Clone, Default, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReplyDraftUpdate {
+    /// New subject.
+    #[serde(default)]
+    pub subject: Option<String>,
+    /// New body.
+    #[serde(default)]
+    pub body: Option<String>,
+    /// `dismissed` to set the draft aside.
+    #[serde(default)]
+    pub status: Option<ReplyDraftAction>,
+}
+
+/// How an edit to a draft ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReplyDraftOutcome {
+    /// Saved.
+    Updated(ReplyDraft),
+    /// No such draft in this campaign.
+    NotFound,
+    /// Already sent or dismissed.
+    Closed(ReplyDraftStatus),
+}
+
+/// A queued reply, with what the writer needs to answer it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyDraftRequest {
+    /// The draft to fill.
+    pub id: Uuid,
+    /// The campaign.
+    pub campaign_id: Uuid,
+    /// Who replied.
+    pub recipient_email: String,
+    /// Subject of the campaign email they answered.
+    pub sent_subject: Option<String>,
+    /// Their reply's subject.
+    pub inbound_subject: Option<String>,
+    /// The start of their reply.
+    pub inbound_text: Option<String>,
+}
+
+/// Text written for a draft.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyDraftText {
+    /// Subject; empty keeps the thread's.
+    pub subject: String,
+    /// Body.
+    pub body: String,
 }
 
 /// The mailbox a sender slot sends from.

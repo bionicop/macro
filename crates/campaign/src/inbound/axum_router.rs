@@ -2,7 +2,8 @@
 
 use crate::domain::models::{
     AccessibleCampaign, CampaignError, DeliveryError, CampaignSettings, CampaignSharing, CampaignStats,
-    CreateCampaign, DailyRange, DailyStats, LaunchCampaign, LaunchOutcome, Recipients, Sender, Step, StepInput,
+    CreateCampaign, DailyRange, DailyStats, LaunchCampaign, LaunchOutcome, Recipients, ReplyDraft, ReplyDraftStatus, ReplyDraftUpdate, Sender, Step,
+    StepInput,
 };
 use crate::domain::export;
 use crate::domain::service::CampaignService;
@@ -109,6 +110,11 @@ where
         .route("/{id}/recipients/export", get(export_recipients::<P, E, A>))
         .route("/{id}/recipients/remove", post(remove_recipients::<P, E, A>))
         .route("/{id}/stats", get(stats::<P, E, A>))
+        .route("/{id}/reply-drafts", get(reply_drafts::<P, E, A>))
+        .route(
+            "/{id}/reply-drafts/{draft_id}",
+            put(update_reply_draft::<P, E, A>),
+        )
         .route("/{id}/stats/daily", get(daily_stats::<P, E, A>))
         .route("/stats/daily", get(all_daily_stats::<P, E, A>))
         .with_state(state)
@@ -669,6 +675,63 @@ impl DailyStatsQuery {
     fn range(&self) -> Result<DailyRange, CampaignError> {
         DailyRange::new(self.from, self.to, self.tz.as_deref())
     }
+}
+
+/// Which drafts to list.
+#[derive(serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct ReplyDraftsQuery {
+    /// Only drafts in this state: pending, ready, dismissed or sent.
+    #[param(inline)]
+    pub status: Option<ReplyDraftStatus>,
+}
+
+/// Draft replies to recipients' replies, for the owner to review. They are
+/// never sent automatically.
+#[utoipa::path(get, path = "/campaigns/{id}/reply-drafts", operation_id = "list_campaign_reply_drafts",
+    params(("id" = Uuid, Path), ReplyDraftsQuery), responses((status = 200, body = Vec<ReplyDraft>)))]
+pub async fn reply_drafts<P: CampaignService, E: EntityAccessService, A: MacroAuthorizationService>(
+    auth: MacroAuthorizationExtractor<A, UserOrInternal>,
+    State(state): State<CampaignRouterState<P, E, A>>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<ReplyDraftsQuery>,
+) -> Result<Json<Vec<ReplyDraft>>, CampaignError> {
+    Ok(Json(
+        state
+            .service
+            .reply_drafts(
+                receipt::<ViewAccessLevel, _, _>(&*state.access, auth, id).await?,
+                query.status,
+            )
+            .await?,
+    ))
+}
+
+/// Edit a draft's subject or body, or dismiss it. Sent or dismissed drafts
+/// cannot be changed (409).
+#[utoipa::path(put, path = "/campaigns/{id}/reply-drafts/{draft_id}", operation_id = "update_campaign_reply_draft",
+    params(("id" = Uuid, Path), ("draft_id" = Uuid, Path)), request_body = ReplyDraftUpdate,
+    responses((status = 200, body = ReplyDraft)))]
+pub async fn update_reply_draft<
+    P: CampaignService,
+    E: EntityAccessService,
+    A: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<A, UserOrInternal>,
+    State(state): State<CampaignRouterState<P, E, A>>,
+    Path((id, draft_id)): Path<(Uuid, Uuid)>,
+    Json(update): Json<ReplyDraftUpdate>,
+) -> Result<Json<ReplyDraft>, CampaignError> {
+    Ok(Json(
+        state
+            .service
+            .update_reply_draft(
+                receipt::<EditAccessLevel, _, _>(&*state.access, auth, id).await?,
+                draft_id,
+                update,
+            )
+            .await?,
+    ))
 }
 
 /// Sent, opened, replied and bounced per day for one campaign.

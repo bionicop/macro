@@ -7,6 +7,7 @@
 //! add them with `AddCampaignRecipients`. Connected inbox ids come from
 //! `ListInboxes`. Launching sends real email, so it needs the user's words.
 
+mod drafts;
 mod edit;
 mod read;
 mod send;
@@ -29,6 +30,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+pub use drafts::{
+    ListReplyDrafts, ListReplyDraftsResponse, UpdateReplyDraft, UpdateReplyDraftResponse,
+};
 pub use edit::{
     AddCampaignRecipients, AddCampaignRecipientsResponse, CreateCampaign, CreateCampaignResponse,
     EditCampaign, EditCampaignResponse, RemoveCampaignRecipients, RemoveCampaignRecipientsResponse,
@@ -84,6 +88,8 @@ where
         .add_tool::<EditCampaign, CampaignToolContext<S, E>>()
         .add_tool::<AddCampaignRecipients, CampaignToolContext<S, E>>()
         .add_tool::<RemoveCampaignRecipients, CampaignToolContext<S, E>>()
+        .add_tool::<ListReplyDrafts, CampaignToolContext<S, E>>()
+        .add_tool::<UpdateReplyDraft, CampaignToolContext<S, E>>()
         .add_tool::<LaunchCampaign, CampaignToolContext<S, E>>()
         .add_tool::<PauseCampaign, CampaignToolContext<S, E>>()
 }
@@ -186,6 +192,10 @@ pub struct ToolSettings {
     pub stop_on_reply: bool,
     /// Count opens with a tracking pixel.
     pub track_opens: bool,
+    /// Queue a draft reply, for the user to review, when a recipient replies.
+    /// Drafts are never sent. Omit to keep the current value.
+    #[serde(default)]
+    pub auto_draft_replies: Option<bool>,
 }
 
 impl ToolSettings {
@@ -197,6 +207,7 @@ impl ToolSettings {
             send_days: settings.send_days,
             stop_on_reply: settings.stop_on_reply,
             track_opens: settings.track_opens,
+            auto_draft_replies: Some(settings.auto_draft_replies),
         }
     }
 
@@ -210,6 +221,7 @@ impl ToolSettings {
             send_days: self.send_days,
             stop_on_reply: self.stop_on_reply,
             track_opens: self.track_opens,
+            auto_draft_replies: self.auto_draft_replies.unwrap_or(current.auto_draft_replies),
         }
     }
 }

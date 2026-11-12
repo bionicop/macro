@@ -5,7 +5,8 @@ use crate::domain::models::{
     Campaign, CampaignBlueprint, CampaignSettings, CampaignSharing, CampaignStats,
     CampaignStatus, DailyCounts, DailyRange, DueRecipient, Enrollment, FirstSend, Recipient, RecipientState,
     RecipientUpdate, Reservation, Reserved, SendRecord, SendStatus, Sender, SenderMailbox,
-    SenderUsage, SendersOutcome, Step, StepCondition, StepInput, StepStats, StepsOutcome,
+    ReplyDraft, ReplyDraftOutcome, ReplyDraftRequest, ReplyDraftStatus, ReplyDraftText,
+    ReplyDraftUpdate, SenderUsage, SendersOutcome, Step, StepCondition, StepInput, StepStats, StepsOutcome,
 };
 use crate::domain::ports::{CampaignRepo, SenderRepo};
 use chrono::{DateTime, NaiveDate, Utc};
@@ -62,6 +63,45 @@ fn condition_text(condition: StepCondition) -> &'static str {
         StepCondition::Always => "always",
         StepCondition::NotOpened => "not_opened",
         StepCondition::Opened => "opened",
+    }
+}
+
+/// A reply draft row as stored.
+struct DraftRow {
+    id: Uuid,
+    campaign_id: Uuid,
+    row_id: Option<Uuid>,
+    recipient_email: String,
+    send_id: Option<Uuid>,
+    inbound_message_id: Uuid,
+    thread_id: Option<Uuid>,
+    inbound_subject: Option<String>,
+    inbound_text: Option<String>,
+    status: String,
+    draft_subject: String,
+    draft_body: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+impl DraftRow {
+    fn into_draft(self) -> Result<ReplyDraft, sqlx::Error> {
+        Ok(ReplyDraft {
+            id: self.id,
+            campaign_id: self.campaign_id,
+            row_id: self.row_id,
+            recipient_email: self.recipient_email,
+            send_id: self.send_id,
+            inbound_message_id: self.inbound_message_id,
+            thread_id: self.thread_id,
+            inbound_subject: self.inbound_subject,
+            inbound_text: self.inbound_text,
+            status: ReplyDraftStatus::parse(&self.status).ok_or_else(|| decode("Invalid draft status"))?,
+            draft_subject: self.draft_subject,
+            draft_body: self.draft_body,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        })
     }
 }
 
@@ -150,7 +190,7 @@ where
             r#"SELECT c.id, c.team_id, c.database_id, c.table_id, c.primary_column_id,
                       c.name, c.user_id, c.status, c.time_zone, c.time_zone_column_id,
                       c.window_start_minute, c.window_end_minute, c.send_days,
-                      c.stop_on_reply, c.track_opens, c.launched_at, c.created_at, c.trashed_at,
+                      c.stop_on_reply, c.track_opens, c.auto_draft_replies, c.launched_at, c.created_at, c.trashed_at,
                       EXISTS (SELECT 1 FROM entity_access ea WHERE ea.entity_id = c.id
                         AND ea.entity_type = 'campaign' AND ea.source_type = 'team'
                         AND ea.source_id = c.team_id::text) AS "team_shared!"
@@ -185,6 +225,7 @@ where
                         send_days: row.send_days as u8,
                         stop_on_reply: row.stop_on_reply,
                         track_opens: row.track_opens,
+                        auto_draft_replies: row.auto_draft_replies,
                     },
                     launched_at: row.launched_at,
                     created_at: row.created_at,
@@ -327,7 +368,7 @@ where
 
     async fn update_settings(&self, id: Uuid, settings: &CampaignSettings) -> Result<(), Self::Error> {
         sqlx::query!(
-            "UPDATE campaign_entities SET time_zone = $2, time_zone_column_id = $3, window_start_minute = $4, window_end_minute = $5, send_days = $6, stop_on_reply = $7, track_opens = $8, updated_at = now() WHERE id = $1 AND trashed_at IS NULL",
+            "UPDATE campaign_entities SET time_zone = $2, time_zone_column_id = $3, window_start_minute = $4, window_end_minute = $5, send_days = $6, stop_on_reply = $7, track_opens = $8, auto_draft_replies = $9, updated_at = now() WHERE id = $1 AND trashed_at IS NULL",
             id,
             &settings.time_zone,
             settings.time_zone_column_id.map(ColumnId::into_uuid),
@@ -336,6 +377,7 @@ where
             i16::from(settings.send_days),
             settings.stop_on_reply,
             settings.track_opens,
+            settings.auto_draft_replies,
         )
         .execute(&self.pool)
         .await?;
@@ -670,6 +712,78 @@ where
             opened: steps.iter().map(|step| step.opened).sum(),
             steps,
         })
+    }
+
+    async fn reply_drafts(
+        &self,
+        id: Uuid,
+        status: Option<ReplyDraftStatus>,
+    ) -> Result<Vec<ReplyDraft>, Self::Error> {
+        sqlx::query_as!(
+            DraftRow,
+            r#"SELECT id, campaign_id, row_id, recipient_email, send_id, inbound_message_id,
+                      thread_id, inbound_subject, inbound_text, status, draft_subject,
+                      draft_body, created_at, updated_at
+               FROM campaign_reply_drafts
+               WHERE campaign_id = $1 AND ($2::text IS NULL OR status = $2)
+               ORDER BY created_at DESC, id
+               LIMIT 200"#,
+            id,
+            status.map(ReplyDraftStatus::as_str),
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| row.into_draft().map_err(Into::into))
+        .collect()
+    }
+
+    #[tracing::instrument(skip(self, update), err)]
+    async fn update_reply_draft(
+        &self,
+        id: Uuid,
+        draft_id: Uuid,
+        update: &ReplyDraftUpdate,
+    ) -> Result<ReplyDraftOutcome, Self::Error> {
+        let mut tx = self.pool.begin().await?;
+        let Some(current) = sqlx::query_scalar!(
+            "SELECT status FROM campaign_reply_drafts WHERE id = $1 AND campaign_id = $2 FOR UPDATE",
+            draft_id,
+            id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        else {
+            return Ok(ReplyDraftOutcome::NotFound);
+        };
+        let current = ReplyDraftStatus::parse(&current).ok_or_else(|| decode("Invalid draft status"))?;
+        if matches!(current, ReplyDraftStatus::Sent | ReplyDraftStatus::Dismissed) {
+            return Ok(ReplyDraftOutcome::Closed(current));
+        }
+        let row = sqlx::query_as!(
+            DraftRow,
+            r#"UPDATE campaign_reply_drafts SET
+                   draft_subject = coalesce($3, draft_subject),
+                   draft_body = coalesce($4, draft_body),
+                   status = CASE
+                       WHEN $5 THEN 'dismissed'
+                       WHEN btrim(coalesce($4, draft_body)) = '' THEN 'pending'
+                       ELSE 'ready' END,
+                   updated_at = now()
+               WHERE id = $1 AND campaign_id = $2
+               RETURNING id, campaign_id, row_id, recipient_email, send_id, inbound_message_id,
+                         thread_id, inbound_subject, inbound_text, status, draft_subject,
+                         draft_body, created_at, updated_at"#,
+            draft_id,
+            id,
+            update.subject.as_deref(),
+            update.body.as_deref(),
+            update.status.is_some(),
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(ReplyDraftOutcome::Updated(row.into_draft()?))
     }
 
     async fn daily_stats(
@@ -1049,7 +1163,8 @@ where
         // in any inbox the campaign's owner connected, is a reply.
         let marked = sqlx::query_scalar!(
             r#"WITH replied AS (
-                   SELECT DISTINCT s.id
+                   SELECT DISTINCT ON (s.id) s.id, m.id AS message_id, m.thread_id,
+                          m.subject, left(m.body_text, 4000) AS body_text
                    FROM campaign_sends s
                    JOIN campaign_entities c ON c.id = s.campaign_id
                    JOIN email_links l ON l.macro_id = c.user_id AND l.deleting_at IS NULL
@@ -1057,15 +1172,28 @@ where
                    JOIN email_messages m ON m.from_contact_id = ec.id
                    WHERE s.status = 'sent' AND s.replied_at IS NULL AND s.sent_at > $1
                      AND NOT m.is_sent AND NOT m.is_draft AND m.internal_date_ts > s.sent_at
+                   ORDER BY s.id, m.internal_date_ts DESC
                ), marked AS (
                    UPDATE campaign_sends s SET replied_at = now()
                    FROM replied r WHERE s.id = r.id
-                   RETURNING s.campaign_id, s.row_id
+                   RETURNING s.id, s.campaign_id, s.row_id, s.recipient_email
                ), stopped AS (
                    UPDATE campaign_recipients r SET state = 'replied', next_send_at = NULL, updated_at = now()
                    FROM marked m JOIN campaign_entities c ON c.id = m.campaign_id
                    WHERE r.campaign_id = m.campaign_id AND r.row_id = m.row_id
                      AND r.state = 'active' AND c.stop_on_reply
+                   RETURNING 1
+               ), drafted AS (
+                   INSERT INTO campaign_reply_drafts
+                       (id, campaign_id, row_id, recipient_email, send_id, inbound_message_id,
+                        thread_id, inbound_subject, inbound_text)
+                   SELECT gen_random_uuid(), m.campaign_id, m.row_id, lower(m.recipient_email), m.id,
+                          r.message_id, r.thread_id, r.subject, r.body_text
+                   FROM marked m
+                   JOIN replied r ON r.id = m.id
+                   JOIN campaign_entities c ON c.id = m.campaign_id
+                   WHERE c.auto_draft_replies
+                   ON CONFLICT (campaign_id, inbound_message_id) DO NOTHING
                    RETURNING 1
                )
                SELECT count(*) AS "marked!" FROM marked"#,
@@ -1074,6 +1202,59 @@ where
         .fetch_one(&self.pool)
         .await?;
         Ok(marked as u64)
+    }
+
+    async fn pending_reply_drafts(&self, limit: u32) -> Result<Vec<ReplyDraftRequest>, Self::Error> {
+        // A draft nobody could write is asked again only after an hour, so
+        // one stubborn reply cannot starve the queue behind it.
+        Ok(sqlx::query!(
+            r#"SELECT d.id, d.campaign_id, d.recipient_email, d.inbound_subject, d.inbound_text,
+                      se.subject AS sent_subject
+               FROM campaign_reply_drafts d
+               JOIN campaign_entities c ON c.id = d.campaign_id
+               LEFT JOIN campaign_sends se ON se.id = d.send_id
+               WHERE d.status = 'pending' AND c.auto_draft_replies AND c.trashed_at IS NULL
+                 AND (d.updated_at = d.created_at OR d.updated_at < now() - interval '1 hour')
+               ORDER BY d.updated_at, d.id
+               LIMIT $1"#,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| ReplyDraftRequest {
+            id: row.id,
+            campaign_id: row.campaign_id,
+            recipient_email: row.recipient_email,
+            sent_subject: row.sent_subject,
+            inbound_subject: row.inbound_subject,
+            inbound_text: row.inbound_text,
+        })
+        .collect())
+    }
+
+    async fn fill_reply_draft(&self, id: Uuid, text: &ReplyDraftText) -> Result<bool, Self::Error> {
+        Ok(sqlx::query!(
+            "UPDATE campaign_reply_drafts SET draft_subject = $2, draft_body = $3, status = 'ready', updated_at = now()
+             WHERE id = $1 AND status = 'pending' AND btrim($3) <> ''",
+            id,
+            &text.subject,
+            &text.body,
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            == 1)
+    }
+
+    async fn defer_reply_draft(&self, id: Uuid) -> Result<(), Self::Error> {
+        sqlx::query!(
+            "UPDATE campaign_reply_drafts SET updated_at = now() WHERE id = $1 AND status = 'pending'",
+            id
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     async fn detect_bounces(&self, since: DateTime<Utc>) -> Result<u64, Self::Error> {
