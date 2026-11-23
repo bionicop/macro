@@ -1,5 +1,5 @@
 import type { PlotOptions } from '@observablehq/plot';
-import type { InsightDay, InsightMetric } from '../core/insights';
+import type { InsightMetric } from '../core/insights';
 import type { InsightPlotModule } from './insight-plot';
 
 export type InsightSeries = {
@@ -24,11 +24,12 @@ const dateLabel = (date: Date) =>
 export const hourLabel = (hour: number) =>
   `${hour % 12 || 12}${hour < 12 ? 'am' : 'pm'}`;
 
-export function trendPlot(
+export function trendPlot<K extends string = InsightMetric>(
   Plot: InsightPlotModule,
   width: number,
-  days: InsightDay[],
-  series: InsightSeries[]
+  days: readonly ({ date: string } & Record<K, number>)[],
+  series: readonly { key: K; label: string; color: string }[],
+  xLabel = 'Booking start date'
 ): PlotOptions {
   const data = days.flatMap((day) =>
     series.map((item) => ({
@@ -50,7 +51,7 @@ export function trendPlot(
     marginBottom: 42,
     x: {
       type: 'utc',
-      label: 'Booking start date',
+      label: xLabel,
       domain:
         domain.length === 1
           ? [
@@ -109,12 +110,13 @@ export function trendPlot(
 export function hourPlot(
   Plot: InsightPlotModule,
   width: number,
-  hours: number[]
+  hours: readonly number[],
+  unit: [one: string, many: string] = ['booking', 'bookings']
 ): PlotOptions {
   const data = hours.map((count, hour) => ({
     hour,
     count,
-    tip: `${hourLabel(hour)}: ${count} ${count === 1 ? 'booking' : 'bookings'}`,
+    tip: `${hourLabel(hour)}: ${count} ${count === 1 ? unit[0] : unit[1]}`,
   }));
   return {
     width,

@@ -55,6 +55,10 @@ const BookingLinksRouteView = lazyNamed(
   () => import('@app/features/scheduling/route-views'),
   'BookingLinksRouteView'
 );
+const CampaignsRouteView = lazyNamed(
+  () => import('@app/features/campaigns/route-views'),
+  'CampaignsRouteView'
+);
 const ChannelsRouteView = lazyNamed(
   () => import('@app/features/channels-view/route-views'),
   'ChannelsRouteView'
@@ -450,6 +454,11 @@ registerComponent(
 registerComponent(
   'booking-links',
   () => <BookingLinksRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'campaigns',
+  () => <CampaignsRouteView />,
   () => composableLayout()
 );
 registerComponent(

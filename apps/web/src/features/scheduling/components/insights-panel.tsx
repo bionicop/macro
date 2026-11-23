@@ -54,7 +54,7 @@ function formatDate(date: string, long = false): string {
   }).format(new Date(`${date}T12:00:00Z`));
 }
 
-function InsightSection(props: {
+export function InsightSection(props: {
   title: string;
   description?: string;
   actions?: JSX.Element;
@@ -76,7 +76,7 @@ function InsightSection(props: {
   );
 }
 
-function Metric(props: {
+export function Metric(props: {
   label: string;
   definition: string;
   value: number;
@@ -304,7 +304,7 @@ function HourChart(props: { hours: number[] }) {
   );
 }
 
-function RankedList(props: {
+export function RankedList(props: {
   title: string;
   description: string;
   rows: { id: string; name: string; count: number }[];

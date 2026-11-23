@@ -1,6 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
+import { MailCampaignsSection } from '@app/features/campaigns/components/mail-campaigns-section';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -21,7 +22,7 @@ import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { type Component, For, Show } from 'solid-js';
+import { type Component, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_LABELS, EMAIL_TABS, isEmailInboxTab } from '../constants';
@@ -178,6 +179,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
 export function EmailSidebar() {
   const { openWithSplit } = useSplitLayout();
   const { state } = useEmailView();
+  const [campaignsOpen, setCampaignsOpen] = createSignal(true);
 
   return (
     <ViewSidebar.Root reorderId="email" aria-label="Email navigation">
@@ -211,6 +213,11 @@ export function EmailSidebar() {
         <EmailNavigation />
 
         <EmailSavedViewsSection />
+        <MailCampaignsSection
+          inboxIds={state.inboxIds}
+          open={campaignsOpen()}
+          onOpenChange={setCampaignsOpen}
+        />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );
