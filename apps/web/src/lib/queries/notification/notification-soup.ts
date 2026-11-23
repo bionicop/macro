@@ -41,7 +41,8 @@ function notificationEntityTypeToSoupTag(
         'scheduled_action',
         'initiative',
         'external_chat',
-        'harness'
+        'harness',
+        'campaign'
       ),
       () => null
     )

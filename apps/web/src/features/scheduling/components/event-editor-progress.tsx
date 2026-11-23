@@ -53,7 +53,7 @@ export function EventEditorStepMenu<
   reachable?: (index: number) => boolean;
 }) {
   const steps = () =>
-    props.steps ?? (EVENT_EDITOR_STEPS as readonly EditorStep<Id>[]);
+    props.steps ?? (EVENT_EDITOR_STEPS as unknown as readonly EditorStep<Id>[]);
   let pendingStep: Id | undefined;
   let disposed = false;
   onCleanup(() => {

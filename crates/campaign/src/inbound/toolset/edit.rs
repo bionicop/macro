@@ -299,7 +299,7 @@ impl<S: CampaignService, E: EntityAccessService> AsyncTool<CampaignToolContext<S
                 Some(service_context.actor),
                 vec![DatabaseOp::Rows {
                     table: campaign.table_id,
-                    change: RowsChange::Insert { rows },
+                    change: RowsChange::Insert { rows, ids: None },
                 }]
                 .into(),
             )

@@ -361,7 +361,7 @@ export const campaignsClient = {
     ),
   /** Edit the people table with the common database ops. */
   applyOps: (id: string, ops: DatabaseOp[]) =>
-    dssFetch<unknown>(`/campaigns/${id}/ops`, {
+    dssFetch<Record<string, unknown>>(`/campaigns/${id}/ops`, {
       method: 'POST',
       ...json({ ops }),
     }),

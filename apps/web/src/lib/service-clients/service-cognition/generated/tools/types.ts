@@ -435,6 +435,10 @@ export type UserToolResponseForToolCalendarEvent =
       UserAction: ToolCalendarEvent;
     };
 /**
+ * Sharing, as the model writes it.
+ */
+export type ToolSharing = 'private' | 'team';
+/**
  * Channel types an agent may create.
  */
 export type NewChannelType = 'private' | 'team';
@@ -1251,6 +1255,10 @@ export type DiscoveryResult =
  * The kind of item to duplicate.
  */
 export type DuplicableEntityType = 'document' | 'database' | 'chat';
+/**
+ * A step's send condition, as the model writes it.
+ */
+export type ToolCondition = 'always' | 'not_opened' | 'opened';
 /**
  * Targeted layout operations. Removing placements always retains response columns.
  */
@@ -5063,6 +5071,32 @@ export type ToolActivityAction =
     };
 
 /**
+ * Add CRM contacts to a campaign's recipient table, one row each. Find contacts with the CRM tools, or create them with CreateContact. Contacts without an email, or whose address unsubscribed or bounced, are skipped when the campaign enrolls them. Rows added to a running campaign are enrolled within minutes. Other columns, used as merge fields, are written with the database tools.
+ */
+export interface AddCampaignRecipients {
+  /**
+   * The campaign id, from ListCampaigns.
+   */
+  campaignId: string;
+  /**
+   * CRM contact ids, at most 500 per call.
+   */
+  contactIds: string[];
+  /**
+   * IANA time zone these recipients are in, e.g. "Europe/Berlin", when the campaign sends in each recipient's zone. Omit to use the campaign's.
+   */
+  timeZone?: string | null;
+}
+/**
+ * The rows added.
+ */
+export interface AddCampaignRecipientsResponse {
+  /**
+   * One new row per contact, in the order given.
+   */
+  rowIds: string[];
+}
+/**
  * Add a copy of a calendar event someone shared with one of the user's channels to one of the user's Google calendars, as `Add to calendar` on the event's card does. Use it for a calendar event mention (`blockName` `calendar`) whose meeting is not on the user's calendar; pass the mention's `documentId` as `eventId`.
  *
  * The copy is a snapshot, not an invitation: it keeps the real organizer and lists the user, accepted, as its only guest, while the meeting's other guests and its join link stay out. Nobody is notified, and the copy does not change when the organizer changes the meeting. The user can change only its reminders and availability, or delete it. To be added to the meeting itself, the user asks the person who shared it from the event's card.
@@ -7485,6 +7519,33 @@ export interface GuestPolicy {
   canSeeOtherGuests: boolean;
 }
 /**
+ * Create an empty draft email outreach campaign for the user's team, as New campaign does. Nothing is sent until LaunchCampaign. Then write its emails and senders with EditCampaign and add its recipients with AddCampaignRecipients.
+ */
+export interface CreateCampaign {
+  /**
+   * The campaign's name, e.g. "Q3 founders outreach".
+   */
+  name: string;
+  sharing?: ToolSharing & string;
+}
+/**
+ * The created campaign.
+ */
+export interface CreateCampaignResponse {
+  /**
+   * The new campaign id.
+   */
+  campaignId: string;
+  /**
+   * The database holding its recipient table.
+   */
+  databaseId: string;
+  /**
+   * The recipient table; add columns to it for more merge fields.
+   */
+  tableId: string;
+}
+/**
  * Create a private or team channel and add its first members. Use `private` for an invite-only channel and `team` for a channel owned by the current user's team. Do not use this for a direct message — those are created separately. Team id is resolved from the current user; do not invent one. Participants accept `macro|<email>` ids from ListTeamMembers or bare emails. Creating a team channel when the user has no team fails; create a private channel instead. Creating a team channel with no participants adds the current user so the channel is valid. Use only when the user asks to create a channel.
  */
 export interface CreateChannel {
@@ -9175,6 +9236,122 @@ export interface EditBookingLink {
   userConfirmation: string;
 }
 /**
+ * Change a campaign: its name, sharing, sending window, sequence of emails or sender mailboxes. Only the parts given change; `steps` and `senders` replace the whole list, so read them with GetCampaign first and keep each existing step's id. Steps already sent cannot be removed. Senders must be the user's own mailboxes.
+ */
+export interface EditCampaign {
+  /**
+   * The campaign id, from ListCampaigns.
+   */
+  campaignId: string;
+  /**
+   * New name.
+   */
+  name?: string | null;
+  /**
+   * New sharing; only the owner may change it.
+   */
+  sharing?: ToolSharing | null;
+  /**
+   * New sending window and options.
+   */
+  settings?: ToolSettings | null;
+  /**
+   * The whole sequence, in order.
+   */
+  steps?: ToolStep[] | null;
+  /**
+   * The whole mailbox rotation.
+   */
+  senders?: ToolSender[] | null;
+}
+/**
+ * When and how the campaign sends.
+ */
+export interface ToolSettings {
+  /**
+   * IANA time zone the window is read in when a recipient has none, e.g.
+   * "America/New_York".
+   */
+  timeZone: string;
+  /**
+   * Window start, minutes after local midnight (540 = 9:00).
+   */
+  windowStartMinute: number;
+  /**
+   * Window end, minutes after local midnight (1020 = 17:00).
+   */
+  windowEndMinute: number;
+  /**
+   * Days to send on, a bitmask from Monday = 1 to Sunday = 64 (31 = weekdays).
+   */
+  sendDays: number;
+  /**
+   * Stop a recipient's sequence when they reply.
+   */
+  stopOnReply: boolean;
+  /**
+   * Count opens with a tracking pixel.
+   */
+  trackOpens: boolean;
+  /**
+   * Queue a draft reply, for the user to review, when a recipient replies.
+   * Drafts are never sent. Omit to keep the current value.
+   */
+  autoDraftReplies?: boolean | null;
+}
+/**
+ * One email of the sequence.
+ */
+export interface ToolStep {
+  /**
+   * The step's id, to keep an existing step; omit for a new one.
+   */
+  id?: string | null;
+  /**
+   * Minutes to wait after the previous step (or after enrollment, for the
+   * first). 4320 is three days.
+   */
+  delayMinutes: number;
+  /**
+   * Subject. Empty on a follow-up replies in the first email's thread.
+   * Merge fields are written {{Column name}}, with an optional fallback
+   * {{First name|there}}.
+   */
+  subject: string;
+  /**
+   * The body as HTML, with the same merge fields.
+   */
+  bodyHtml: string;
+  condition?: ToolCondition & string;
+}
+/**
+ * A mailbox in the rotation.
+ */
+export interface ToolSender {
+  /**
+   * A connected inbox id from ListInboxes. Give this or `identityId`.
+   */
+  inboxId?: string | null;
+  /**
+   * An SMTP or SendGrid sending identity the user added in Settings.
+   */
+  identityId?: string | null;
+  /**
+   * Most emails this mailbox sends for the campaign per day; 30 to 50 keeps
+   * a new mailbox out of spam.
+   */
+  dailyCap: number;
+}
+/**
+ * What changed.
+ */
+export interface EditCampaignResponse {
+  /**
+   * The parts written, in order.
+   */
+  updated: string[];
+}
+/**
  * Edit a Macro canvas live using natural-language instructions. Can create shapes, text and bound connectors; insert real person mentions using supplied userId/email; move, resize, style, relabel, group, reparent, reorder and delete ordinary items. Preserves unrelated concurrent edits through the live CRDT. Existing assets/references can move or be styled but cannot be created or deleted by this tool. Labels are whole-string last-write-wins. For precise known edits prefer ApplyCanvasEdits, which avoids a nested model. Use this tool for genuine design work; it reviews a rendered image of its own result, so do not RenderCanvas before or after it. ReadCanvas first for IDs and context. Returns acknowledged operation count and outcome; cancellation or network failure may leave partial edits, so reread before retrying. Never send the same edit blindly twice. If ReadCanvas returned artifactGuide, those operations are available here too.
  */
 export interface EditCanvas {
@@ -10548,6 +10725,63 @@ export interface GetBotWebhooksResponse {
   summary: string;
 }
 /**
+ * Read a campaign: its settings, its sequence of emails, the mailboxes it sends from and its results so far (sent, opened, replied, bounced, unsubscribed). Inbox ids in senders are the ids ListInboxes returns.
+ */
+export interface GetCampaign {
+  /**
+   * The campaign id, from ListCampaigns.
+   */
+  campaignId: string;
+}
+/**
+ * Everything about one campaign.
+ */
+export interface GetCampaignResponse {
+  /**
+   * The campaign id.
+   */
+  campaignId: string;
+  /**
+   * Its name.
+   */
+  name: string;
+  /**
+   * draft, active, paused or completed.
+   */
+  status: string;
+  /**
+   * The user's access: view, edit or owner.
+   */
+  access: string;
+  /**
+   * The database holding the recipient table, for the database tools.
+   */
+  databaseId: string;
+  /**
+   * When it was first launched.
+   */
+  launchedAt?: string | null;
+  /**
+   * The recipient table, whose column names are the merge fields.
+   */
+  tableId: string;
+  settings: ToolSettings;
+  /**
+   * The sequence, in order.
+   */
+  steps: ToolStep[];
+  /**
+   * The mailbox rotation.
+   */
+  senders: ToolSender[];
+  /**
+   * Recipient and send counts, per campaign and per step.
+   */
+  stats: {
+    [k: string]: unknown;
+  };
+}
+/**
  * Fetch one of the team's CRM companies by id, with its domains, contacts, its own Stage / Owner / Revenue properties (not a pipeline deal's), and all attached property values (including custom properties and the valid stage options). Use ListCompanies to find company ids. To change one of the company's own properties (its Stage, Owner, Revenue or a custom property) call SetEntityProperty with entity_type=company, the company id, and a property_definition_id / option id from this response. Deals in a pipeline have their own stage and fields: find them with FindPipelineEntries (recordIds = this company's id) and change them with UpdatePipelineEntries.
  */
 export interface GetCompany {
@@ -11510,6 +11744,32 @@ export interface IssueBotCredentialResponse {
   summary: string;
 }
 /**
+ * Start sending a campaign, or resume a paused one. This sends real email to real people, so call it only after the user has reviewed the emails, senders and recipients and asked you to launch, and quote their words. Emails go out inside the sending window, a few per minute per mailbox, up to each mailbox's daily cap.
+ */
+export interface LaunchCampaign {
+  /**
+   * The campaign id, from ListCampaigns.
+   */
+  campaignId: string;
+  /**
+   * The user's own words asking to launch, quoted exactly, e.g. "yes, send it".
+   */
+  userConfirmation: string;
+}
+/**
+ * What a launch did.
+ */
+export interface LaunchCampaignResponse {
+  /**
+   * Recipients newly enrolled.
+   */
+  enrolled: number;
+  /**
+   * Rows skipped: no contact, no email, or a suppressed address.
+   */
+  skipped: number;
+}
+/**
  * List the current user's coding-agent sessions waiting for an answer or stalled for over 20 minutes. The user answers permissions and questions through the cards Macro renders from this tool's result. To send a coding agent instructions, use ManageAgentSession with a prompt. To recall the user's earlier decisions about these agents, search earlier agent conversations with ContentSearch (entity_types agent_sessions) and read them with ReadAgentSession.
  */
 export type ListAgentUpdates = {};
@@ -12009,6 +12269,77 @@ export interface CalendarCapabilities {
    * Whether the organizer can set what guests may do.
    */
   guestPolicy: boolean;
+}
+/**
+ * List the recipients a launched campaign enrolled, with where each is in the sequence: who replied, bounced or unsubscribed, and when the next email goes out. Rows added since launch are enrolled within minutes.
+ */
+export interface ListCampaignRecipients {
+  /**
+   * The campaign id, from ListCampaigns.
+   */
+  campaignId: string;
+  /**
+   * The `next` value of the previous page; omit for the first.
+   */
+  after?: string | null;
+}
+/**
+ * One page of enrolled recipients.
+ */
+export interface ListCampaignRecipientsResponse {
+  /**
+   * Each recipient's row id, contact, address, state (active, completed,
+   * replied, bounced, unsubscribed, failed, removed) and next send.
+   */
+  recipients: {
+    [k: string]: unknown;
+  };
+  /**
+   * Pass as `after` for the next page; absent on the last.
+   */
+  next?: string | null;
+}
+/**
+ * List the email outreach campaigns of the user's team that the user can see, with their status. Use GetCampaign for one campaign's sequence, senders and results.
+ */
+export type ListCampaigns = {};
+/**
+ * The team's campaigns the user can see.
+ */
+export interface ListCampaignsResponse {
+  /**
+   * Campaigns, newest first.
+   */
+  campaigns: ToolCampaignSummary[];
+}
+/**
+ * A campaign in a list.
+ */
+export interface ToolCampaignSummary {
+  /**
+   * The campaign id.
+   */
+  campaignId: string;
+  /**
+   * Its name.
+   */
+  name: string;
+  /**
+   * draft, active, paused or completed.
+   */
+  status: string;
+  /**
+   * The user's access: view, edit or owner.
+   */
+  access: string;
+  /**
+   * The database holding the recipient table, for the database tools.
+   */
+  databaseId: string;
+  /**
+   * When it was first launched.
+   */
+  launchedAt?: string | null;
 }
 /**
  * Find the coding agents available to the current user. Call this before delegating coding work. Choose an agent using its name, description, instructions, runtime, and model, preferring the user's requested agent or the persona best suited to the repository and task. Returns only available coding agents. If none are available, explain that the user needs to connect or configure a coding agent.
@@ -12672,6 +13003,31 @@ export interface ListPipelinesResponse {
   summary: string;
 }
 /**
+ * List the draft replies queued for a campaign when recipients replied. A draft with status "pending" has no text yet: read inboundText and write one with UpdateReplyDraft. Drafts are never sent by this tool or by the campaign.
+ */
+export interface ListReplyDrafts {
+  /**
+   * The campaign id, from ListCampaigns.
+   */
+  campaignId: string;
+  /**
+   * pending, ready, dismissed or sent; omit for all.
+   */
+  status?: string | null;
+}
+/**
+ * The campaign's reply drafts.
+ */
+export interface ListReplyDraftsResponse {
+  /**
+   * Newest first. Each has draftId (`id`), recipientEmail, inboundSubject,
+   * inboundText (what they wrote), status, draftSubject and draftBody.
+   */
+  drafts: {
+    [k: string]: unknown;
+  };
+}
+/**
  * Find the authenticated user’s routines, including work delegated to other agents. Filter by name/instructions or enabled state. Returns up to 50 matches and the full count; narrow the query if truncated. Use ReadRoutine for history.
  */
 export interface ListRoutines {
@@ -13125,6 +13481,24 @@ export interface OpenDirectMessageResponse {
    * Human-readable result summary.
    */
   summary: string;
+}
+/**
+ * Stop a running campaign from sending. Recipients keep their place in the sequence; LaunchCampaign resumes it.
+ */
+export interface PauseCampaign {
+  /**
+   * The campaign id, from ListCampaigns.
+   */
+  campaignId: string;
+}
+/**
+ * Paused.
+ */
+export interface PauseCampaignResponse {
+  /**
+   * Always true; recipients keep their place for LaunchCampaign to resume.
+   */
+  paused: boolean;
 }
 /**
  * Run SQL against the current user's Macro databases — the only way to read or change their rows. SELECT to answer a question, INSERT/UPDATE/DELETE to change data, CREATE/ALTER/DROP to edit schema. One statement per call.
@@ -15023,6 +15397,28 @@ export interface ReadWordDocument {
   count?: number | null;
 }
 /**
+ * Stop sending to some of a campaign's recipients. Their rows and the emails already sent stay; nothing more is sent to them by this campaign.
+ */
+export interface RemoveCampaignRecipients {
+  /**
+   * The campaign id, from ListCampaigns.
+   */
+  campaignId: string;
+  /**
+   * Recipient row ids, from ListCampaignRecipients.
+   */
+  rowIds: string[];
+}
+/**
+ * How many stopped.
+ */
+export interface RemoveCampaignRecipientsResponse {
+  /**
+   * Recipients whose sequence stopped.
+   */
+  removed: number;
+}
+/**
  * Remove deals (entries) from a CRM pipeline, deleting their stage and other pipeline fields. The companies and contacts themselves stay in the CRM and in other pipelines. Address entries by entryId, or by the company or contact id they track (which removes every entry of that record in this pipeline). Only when the user asked to remove them.
  */
 export interface RemoveFromPipeline {
@@ -16208,6 +16604,42 @@ export interface ToolFieldChange {
    * Currency of the saved amount, for monetary fields.
    */
   afterCurrency?: string | null;
+}
+/**
+ * Write the subject and body of a reply draft, or dismiss it. Writing text makes a pending draft ready for the user to review; this does not send anything, and the user decides whether to send.
+ */
+export interface UpdateReplyDraft {
+  /**
+   * The campaign id, from ListCampaigns.
+   */
+  campaignId: string;
+  /**
+   * The draft id, from ListReplyDrafts.
+   */
+  draftId: string;
+  /**
+   * New subject.
+   */
+  subject?: string | null;
+  /**
+   * New body, plain text.
+   */
+  body?: string | null;
+  /**
+   * "dismissed" to set the draft aside.
+   */
+  status?: string | null;
+}
+/**
+ * The saved draft.
+ */
+export interface UpdateReplyDraftResponse {
+  /**
+   * The draft after the change.
+   */
+  draft: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send its `configuration` back with only your change (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Omit requiredApps to keep the routine's apps. Routines ReadRoutine marks `notEditableHere` can only be paused or resumed here. Does not change ownership or the description. A running routine can be paused but cannot be reconfigured until it finishes.

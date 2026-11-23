@@ -9,6 +9,10 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+  AddCampaignRecipients: {
+    call: types.AddCampaignRecipients;
+    response: types.AddCampaignRecipientsResponse;
+  };
   AddSharedCalendarEvent: {
     call: types.AddSharedCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -67,6 +71,10 @@ type ToolParserMap = {
   CreateCalendarEvent: {
     call: types.CreateCalendarEvent;
     response: types.UserToolResponseForToolCalendarEvent;
+  };
+  CreateCampaign: {
+    call: types.CreateCampaign;
+    response: types.CreateCampaignResponse;
   };
   CreateChannel: {
     call: types.CreateChannel;
@@ -164,6 +172,10 @@ type ToolParserMap = {
     call: types.EditBookingLink;
     response: types.BookingLinkResult;
   };
+  EditCampaign: {
+    call: types.EditCampaign;
+    response: types.EditCampaignResponse;
+  };
   EditCanvas: { call: types.EditCanvas; response: types.CanvasResponse };
   EditChannelMessage: {
     call: types.EditChannelMessage;
@@ -221,6 +233,7 @@ type ToolParserMap = {
     call: types.GetBotWebhooks;
     response: types.GetBotWebhooksResponse;
   };
+  GetCampaign: { call: types.GetCampaign; response: types.GetCampaignResponse };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
@@ -263,6 +276,10 @@ type ToolParserMap = {
     call: types.IssueBotCredential;
     response: types.IssueBotCredentialResponse;
   };
+  LaunchCampaign: {
+    call: types.LaunchCampaign;
+    response: types.LaunchCampaignResponse;
+  };
   ListAgents: { call: types.ListAgents; response: types.ListAgentsResponse };
   ListAgentUpdates: {
     call: types.ListAgentUpdates;
@@ -281,6 +298,14 @@ type ToolParserMap = {
   ListCalendars: {
     call: types.ListCalendars;
     response: types.ListCalendarsToolResponse;
+  };
+  ListCampaignRecipients: {
+    call: types.ListCampaignRecipients;
+    response: types.ListCampaignRecipientsResponse;
+  };
+  ListCampaigns: {
+    call: types.ListCampaigns;
+    response: types.ListCampaignsResponse;
   };
   ListCodingAgents: {
     call: types.ListCodingAgents;
@@ -316,6 +341,10 @@ type ToolParserMap = {
   ListPipelines: {
     call: types.ListPipelines;
     response: types.ListPipelinesResponse;
+  };
+  ListReplyDrafts: {
+    call: types.ListReplyDrafts;
+    response: types.ListReplyDraftsResponse;
   };
   ListRoutines: { call: types.ListRoutines; response: types.RoutineList };
   ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
@@ -358,6 +387,10 @@ type ToolParserMap = {
   OpenDirectMessage: {
     call: types.OpenDirectMessage;
     response: types.OpenDirectMessageResponse;
+  };
+  PauseCampaign: {
+    call: types.PauseCampaign;
+    response: types.PauseCampaignResponse;
   };
   QueryDatabase: {
     call: types.QueryDatabase;
@@ -449,6 +482,10 @@ type ToolParserMap = {
   ReadWordDocument: {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;
+  };
+  RemoveCampaignRecipients: {
+    call: types.RemoveCampaignRecipients;
+    response: types.RemoveCampaignRecipientsResponse;
   };
   RemoveFromPipeline: {
     call: types.RemoveFromPipeline;
@@ -546,6 +583,10 @@ type ToolParserMap = {
     call: types.UpdatePipelineEntries;
     response: types.UpdatePipelineEntriesResponse;
   };
+  UpdateReplyDraft: {
+    call: types.UpdateReplyDraft;
+    response: types.UpdateReplyDraftResponse;
+  };
   UpdateRoutine: { call: types.UpdateRoutine; response: types.RoutineInfo };
   UpdateSharing: {
     call: types.UpdateSharing;
@@ -561,6 +602,10 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
+  AddCampaignRecipients: {
+    call: schemas.AddCampaignRecipients,
+    response: schemas.AddCampaignRecipientsResponse,
+  },
   AddSharedCalendarEvent: {
     call: schemas.AddSharedCalendarEvent,
     response: schemas.ToolCalendarEvent,
@@ -619,6 +664,10 @@ const toolParserMap = {
   CreateCalendarEvent: {
     call: schemas.CreateCalendarEvent,
     response: schemas.UserToolResponseForToolCalendarEvent,
+  },
+  CreateCampaign: {
+    call: schemas.CreateCampaign,
+    response: schemas.CreateCampaignResponse,
   },
   CreateChannel: {
     call: schemas.CreateChannel,
@@ -722,6 +771,10 @@ const toolParserMap = {
     call: schemas.EditBookingLink,
     response: schemas.BookingLinkResult,
   },
+  EditCampaign: {
+    call: schemas.EditCampaign,
+    response: schemas.EditCampaignResponse,
+  },
   EditCanvas: { call: schemas.EditCanvas, response: schemas.CanvasResponse },
   EditChannelMessage: {
     call: schemas.EditChannelMessage,
@@ -785,6 +838,10 @@ const toolParserMap = {
     call: schemas.GetBotWebhooks,
     response: schemas.GetBotWebhooksResponse,
   },
+  GetCampaign: {
+    call: schemas.GetCampaign,
+    response: schemas.GetCampaignResponse,
+  },
   GetCompany: {
     call: schemas.GetCompany,
     response: schemas.GetCompanyResponse,
@@ -830,6 +887,10 @@ const toolParserMap = {
     call: schemas.IssueBotCredential,
     response: schemas.IssueBotCredentialResponse,
   },
+  LaunchCampaign: {
+    call: schemas.LaunchCampaign,
+    response: schemas.LaunchCampaignResponse,
+  },
   ListAgents: {
     call: schemas.ListAgents,
     response: schemas.ListAgentsResponse,
@@ -854,6 +915,14 @@ const toolParserMap = {
   ListCalendars: {
     call: schemas.ListCalendars,
     response: schemas.ListCalendarsToolResponse,
+  },
+  ListCampaignRecipients: {
+    call: schemas.ListCampaignRecipients,
+    response: schemas.ListCampaignRecipientsResponse,
+  },
+  ListCampaigns: {
+    call: schemas.ListCampaigns,
+    response: schemas.ListCampaignsResponse,
   },
   ListCodingAgents: {
     call: schemas.ListCodingAgents,
@@ -895,6 +964,10 @@ const toolParserMap = {
   ListPipelines: {
     call: schemas.ListPipelines,
     response: schemas.ListPipelinesResponse,
+  },
+  ListReplyDrafts: {
+    call: schemas.ListReplyDrafts,
+    response: schemas.ListReplyDraftsResponse,
   },
   ListRoutines: { call: schemas.ListRoutines, response: schemas.RoutineList },
   ListSkills: {
@@ -946,6 +1019,10 @@ const toolParserMap = {
   OpenDirectMessage: {
     call: schemas.OpenDirectMessage,
     response: schemas.OpenDirectMessageResponse,
+  },
+  PauseCampaign: {
+    call: schemas.PauseCampaign,
+    response: schemas.PauseCampaignResponse,
   },
   QueryDatabase: {
     call: schemas.QueryDatabase,
@@ -1049,6 +1126,10 @@ const toolParserMap = {
   ReadWordDocument: {
     call: schemas.ReadWordDocument,
     response: schemas.WordDocumentResponse,
+  },
+  RemoveCampaignRecipients: {
+    call: schemas.RemoveCampaignRecipients,
+    response: schemas.RemoveCampaignRecipientsResponse,
   },
   RemoveFromPipeline: {
     call: schemas.RemoveFromPipeline,
@@ -1161,6 +1242,10 @@ const toolParserMap = {
     call: schemas.UpdatePipelineEntries,
     response: schemas.UpdatePipelineEntriesResponse,
   },
+  UpdateReplyDraft: {
+    call: schemas.UpdateReplyDraft,
+    response: schemas.UpdateReplyDraftResponse,
+  },
   UpdateRoutine: { call: schemas.UpdateRoutine, response: schemas.RoutineInfo },
   UpdateSharing: {
     call: schemas.UpdateSharing,
@@ -1187,6 +1272,10 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+  AddCampaignRecipients: {
+    call: types.AddCampaignRecipients;
+    response: types.AddCampaignRecipientsResponse;
+  };
   AddSharedCalendarEvent: {
     call: types.AddSharedCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -1245,6 +1334,10 @@ type ToolDataMap = {
   CreateCalendarEvent: {
     call: types.CreateCalendarEvent;
     response: types.UserToolResponseForToolCalendarEvent;
+  };
+  CreateCampaign: {
+    call: types.CreateCampaign;
+    response: types.CreateCampaignResponse;
   };
   CreateChannel: {
     call: types.CreateChannel;
@@ -1342,6 +1435,10 @@ type ToolDataMap = {
     call: types.EditBookingLink;
     response: types.BookingLinkResult;
   };
+  EditCampaign: {
+    call: types.EditCampaign;
+    response: types.EditCampaignResponse;
+  };
   EditCanvas: { call: types.EditCanvas; response: types.CanvasResponse };
   EditChannelMessage: {
     call: types.EditChannelMessage;
@@ -1399,6 +1496,7 @@ type ToolDataMap = {
     call: types.GetBotWebhooks;
     response: types.GetBotWebhooksResponse;
   };
+  GetCampaign: { call: types.GetCampaign; response: types.GetCampaignResponse };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
@@ -1441,6 +1539,10 @@ type ToolDataMap = {
     call: types.IssueBotCredential;
     response: types.IssueBotCredentialResponse;
   };
+  LaunchCampaign: {
+    call: types.LaunchCampaign;
+    response: types.LaunchCampaignResponse;
+  };
   ListAgents: { call: types.ListAgents; response: types.ListAgentsResponse };
   ListAgentUpdates: {
     call: types.ListAgentUpdates;
@@ -1459,6 +1561,14 @@ type ToolDataMap = {
   ListCalendars: {
     call: types.ListCalendars;
     response: types.ListCalendarsToolResponse;
+  };
+  ListCampaignRecipients: {
+    call: types.ListCampaignRecipients;
+    response: types.ListCampaignRecipientsResponse;
+  };
+  ListCampaigns: {
+    call: types.ListCampaigns;
+    response: types.ListCampaignsResponse;
   };
   ListCodingAgents: {
     call: types.ListCodingAgents;
@@ -1494,6 +1604,10 @@ type ToolDataMap = {
   ListPipelines: {
     call: types.ListPipelines;
     response: types.ListPipelinesResponse;
+  };
+  ListReplyDrafts: {
+    call: types.ListReplyDrafts;
+    response: types.ListReplyDraftsResponse;
   };
   ListRoutines: { call: types.ListRoutines; response: types.RoutineList };
   ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
@@ -1536,6 +1650,10 @@ type ToolDataMap = {
   OpenDirectMessage: {
     call: types.OpenDirectMessage;
     response: types.OpenDirectMessageResponse;
+  };
+  PauseCampaign: {
+    call: types.PauseCampaign;
+    response: types.PauseCampaignResponse;
   };
   QueryDatabase: {
     call: types.QueryDatabase;
@@ -1627,6 +1745,10 @@ type ToolDataMap = {
   ReadWordDocument: {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;
+  };
+  RemoveCampaignRecipients: {
+    call: types.RemoveCampaignRecipients;
+    response: types.RemoveCampaignRecipientsResponse;
   };
   RemoveFromPipeline: {
     call: types.RemoveFromPipeline;
@@ -1723,6 +1845,10 @@ type ToolDataMap = {
   UpdatePipelineEntries: {
     call: types.UpdatePipelineEntries;
     response: types.UpdatePipelineEntriesResponse;
+  };
+  UpdateReplyDraft: {
+    call: types.UpdateReplyDraft;
+    response: types.UpdateReplyDraftResponse;
   };
   UpdateRoutine: { call: types.UpdateRoutine; response: types.RoutineInfo };
   UpdateSharing: {

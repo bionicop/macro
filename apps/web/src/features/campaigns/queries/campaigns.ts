@@ -16,7 +16,7 @@ import {
 import {
   infiniteQueryOptions,
   queryOptions,
-  type UseMutationOptions,
+  type SolidMutationOptions,
   useInfiniteQuery,
   useMutation,
   useQueries,
@@ -382,7 +382,7 @@ function refreshCampaign(id: string, withStats = false) {
 
 /* -------------------------------- mutations ------------------------------- */
 
-type MutationOptions<Data, Variables> = UseMutationOptions<
+type MutationOptions<Data, Variables> = SolidMutationOptions<
   Data,
   Error,
   Variables,

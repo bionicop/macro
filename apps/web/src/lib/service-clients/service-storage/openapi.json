@@ -4572,6 +4572,1212 @@
         }
       }
     },
+    "/campaigns": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "List the caller's live campaigns in their team.",
+        "operationId": "list_campaigns",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessibleCampaign"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Create a private or team-shared draft campaign.",
+        "operationId": "create_campaign",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCampaign"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessibleCampaign"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/identities": {
+      "get": {
+        "tags": ["campaign::inbound::identity_router"],
+        "summary": "The caller's sending identities, without secrets.",
+        "operationId": "list_campaign_identities",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SendingIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["campaign::inbound::identity_router"],
+        "summary": "Check SMTP or SendGrid credentials with the provider, then store them\nencrypted. A wrong password answers 400; an unreachable server 502.",
+        "operationId": "create_campaign_identity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSendingIdentity"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendingIdentity"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/identities/{id}": {
+      "delete": {
+        "tags": ["campaign::inbound::identity_router"],
+        "summary": "Delete one of the caller's identities; campaigns stop sending from it.",
+        "operationId": "delete_campaign_identity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/campaigns/public/open/{send_id}/{token}": {
+      "get": {
+        "tags": ["campaign::inbound::public_router"],
+        "summary": "The open pixel. Always the image, so a bad token or a storage error\nnever shows as a broken image in the recipient's mail.",
+        "operationId": "campaign_open_pixel",
+        "parameters": [
+          {
+            "name": "send_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "image/gif": {}
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/public/unsubscribe/{send_id}/{token}": {
+      "get": {
+        "tags": ["campaign::inbound::public_router"],
+        "summary": "A confirm button rather than unsubscribing on GET: mail scanners follow\nlinks, and must not unsubscribe anyone by doing so.",
+        "operationId": "campaign_unsubscribe_page",
+        "parameters": [
+          {
+            "name": "send_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/html": {}
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "tags": ["campaign::inbound::public_router"],
+        "summary": "Unsubscribe. Serves both the confirm form and mail clients' one-click\n`List-Unsubscribe-Post` (RFC 8058); the body is not needed for either.",
+        "operationId": "campaign_unsubscribe",
+        "parameters": [
+          {
+            "name": "send_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/html": {}
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/campaigns/stats/daily": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "The daily series summed over every live campaign the caller can see.",
+        "operationId": "get_all_campaigns_daily_stats",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "First day, inclusive, `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Last day, inclusive, `YYYY-MM-DD`; at most 366 days after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "tz",
+            "in": "query",
+            "description": "IANA zone the days are cut in; UTC when omitted.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Read one campaign by its entity identity.",
+        "operationId": "get_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessibleCampaign"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/launch": {
+      "post": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Enroll the table's contacts and start or resume sending.",
+        "operationId": "launch_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LaunchCampaign"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LaunchOutcome"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/name": {
+      "put": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Rename a campaign.",
+        "operationId": "rename_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameCampaign"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/ops": {
+      "post": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Edit the recipient table with the common typed operations.",
+        "operationId": "apply_campaign_ops",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppliedOps"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/pause": {
+      "post": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Stop sending; recipients keep their place.",
+        "operationId": "pause_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/permissions": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Read the owner, team grant and channel recipients.",
+        "operationId": "get_campaign_permissions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Share with channels, or change or remove their access. Team access\nchanges through `/sharing`; there is no share link.",
+        "operationId": "update_campaign_permissions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/recipients": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "A page of enrolled recipients.",
+        "operationId": "get_campaign_recipients",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Continue after this row identity.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipients"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/recipients/export": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Every enrolled recipient as a CSV file.",
+        "operationId": "export_campaign_recipients",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/recipients/remove": {
+      "post": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Stop these recipients' sequences; their rows stay.",
+        "operationId": "remove_campaign_recipients",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveRecipients"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemovedRecipients"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/reply-drafts": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Draft replies to recipients' replies, for the owner to review. They are\nnever sent automatically.",
+        "operationId": "list_campaign_reply_drafts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only drafts in this state: pending, ready, dismissed or sent.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Where a reply draft stands.",
+              "enum": ["pending", "ready", "dismissed", "sent"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReplyDraft"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/reply-drafts/{draft_id}": {
+      "put": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Edit a draft's subject or body, or dismiss it. Sent or dismissed drafts\ncannot be changed (409).",
+        "operationId": "update_campaign_reply_draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyDraftUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyDraft"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/rows": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Read recipient rows through campaign access.",
+        "operationId": "get_campaign_rows",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Continue after this row identity.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageRows"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Query recipient rows using the shared view protocol.",
+        "operationId": "query_campaign_rows",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorageRowsQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageRows"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/senders": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Read the sender rotation.",
+        "operationId": "get_campaign_senders",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Sender"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Replace the sender rotation with the caller's own mailboxes.",
+        "operationId": "set_campaign_senders",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Sender"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Sender"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/settings": {
+      "put": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Replace the sending window, days and tracking.",
+        "operationId": "update_campaign_settings",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/sharing": {
+      "put": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Update team sharing.",
+        "operationId": "share_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareCampaign"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/stats": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Recipient and send counts.",
+        "operationId": "get_campaign_stats",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/stats/daily": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Sent, opened, replied and bounced per day for one campaign.",
+        "operationId": "get_campaign_daily_stats",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "First day, inclusive, `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Last day, inclusive, `YYYY-MM-DD`; at most 366 days after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "tz",
+            "in": "query",
+            "description": "IANA zone the days are cut in; UTC when omitted.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/steps": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Read the sequence in order.",
+        "operationId": "get_campaign_steps",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Step"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Replace the sequence. Keep a step's `id` to edit it; sent steps cannot be\nremoved.",
+        "operationId": "set_campaign_steps",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/StepInput"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Step"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/table": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Read the recipient table schema.",
+        "operationId": "get_campaign_table",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/trash": {
+      "put": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Trash or restore. Trashing an active campaign pauses it.",
+        "operationId": "trash_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrashCampaign"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/views/{view}/positions": {
+      "get": {
+        "tags": ["campaign::inbound::axum_router"],
+        "summary": "Read saved board positions through campaign access.",
+        "operationId": "get_campaign_view_positions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "view",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CardPosition"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channel-labels": {
       "get": {
         "tags": ["channel_labels"],
@@ -19508,7 +20714,8 @@
                   "database",
                   "database_row",
                   "form",
-                  "external_chat"
+                  "external_chat",
+                  "campaign"
                 ]
               }
             },
@@ -19729,7 +20936,8 @@
                 "database",
                 "database_row",
                 "form",
-                "external_chat"
+                "external_chat",
+                "campaign"
               ]
             }
           },
@@ -32225,6 +33433,25 @@
           }
         }
       },
+      "AccessibleCampaign": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Campaign",
+            "description": "Campaign metadata."
+          },
+          {
+            "type": "object",
+            "required": ["grant"],
+            "properties": {
+              "grant": {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "Highest effective access."
+              }
+            }
+          }
+        ],
+        "description": "Metadata together with the caller's effective grant."
+      },
       "AccessiblePipeline": {
         "allOf": [
           {
@@ -32519,7 +33746,8 @@
                   "database",
                   "database_row",
                   "form",
-                  "external_chat"
+                  "external_chat",
+                  "campaign"
                 ]
               }
             ],
@@ -36400,6 +37628,231 @@
           }
         }
       },
+      "Campaign": {
+        "type": "object",
+        "description": "Campaign metadata; recipients are read through the database service.",
+        "required": [
+          "id",
+          "teamId",
+          "userId",
+          "name",
+          "status",
+          "databaseId",
+          "tableId",
+          "primaryColumnId",
+          "sharing",
+          "settings",
+          "launchedAt",
+          "createdAt",
+          "trashedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "databaseId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Dedicated backing database."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Entity identity, used with `Campaign` access receipts."
+          },
+          "launchedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "First launch."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "primaryColumnId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Protected contact reference column."
+          },
+          "settings": {
+            "$ref": "#/components/schemas/CampaignSettings",
+            "description": "Window, days and tracking."
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/CampaignSharing",
+            "description": "Whether the campaign has a team grant."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CampaignStatus",
+            "description": "Lifecycle."
+          },
+          "tableId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Recipient table."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team whose contacts the campaign mails."
+          },
+          "trashedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Trashed campaigns send nothing and are omitted from navigation."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Owning user; sharing never changes ownership."
+          }
+        }
+      },
+      "CampaignSettings": {
+        "type": "object",
+        "description": "When and how a campaign sends.",
+        "required": [
+          "timeZone",
+          "timeZoneColumnId",
+          "windowStartMinute",
+          "windowEndMinute",
+          "sendDays",
+          "stopOnReply",
+          "trackOpens"
+        ],
+        "properties": {
+          "autoDraftReplies": {
+            "type": "boolean",
+            "description": "Queue a draft reply, for the owner to review, when a recipient replies.\nDrafts are never sent automatically."
+          },
+          "sendDays": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Allowed ISO weekdays, bit 0 = Monday.",
+            "minimum": 0
+          },
+          "stopOnReply": {
+            "type": "boolean",
+            "description": "Stop a recipient's sequence once they reply."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA zone of the sending window for recipients without their own."
+          },
+          "timeZoneColumnId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Recipient column holding each recipient's IANA zone."
+          },
+          "trackOpens": {
+            "type": "boolean",
+            "description": "Add an open-tracking pixel to sent mail."
+          },
+          "windowEndMinute": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Window end, minutes after local midnight, exclusive.",
+            "minimum": 0
+          },
+          "windowStartMinute": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Window start, minutes after local midnight.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "CampaignSharing": {
+        "type": "string",
+        "description": "Initial sharing, or the desired team grant. Ownership never changes.",
+        "enum": ["private", "team"]
+      },
+      "CampaignStats": {
+        "type": "object",
+        "description": "Counts for the campaign's analytics.",
+        "required": [
+          "enrolled",
+          "active",
+          "completed",
+          "replied",
+          "bounced",
+          "unsubscribed",
+          "failed",
+          "sent",
+          "opened",
+          "steps"
+        ],
+        "properties": {
+          "active": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recipients still in the sequence.",
+            "minimum": 0
+          },
+          "bounced": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recipients whose address bounced.",
+            "minimum": 0
+          },
+          "completed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recipients who received every step.",
+            "minimum": 0
+          },
+          "enrolled": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recipients enrolled.",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recipients whose send failed.",
+            "minimum": 0
+          },
+          "opened": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sent emails opened at least once.",
+            "minimum": 0
+          },
+          "replied": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recipients who replied.",
+            "minimum": 0
+          },
+          "sent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Emails sent.",
+            "minimum": 0
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepStats"
+            },
+            "description": "Per-step counts, in sequence order."
+          },
+          "unsubscribed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recipients who unsubscribed.",
+            "minimum": 0
+          }
+        }
+      },
+      "CampaignStatus": {
+        "type": "string",
+        "description": "Where a campaign is in its life.",
+        "enum": ["draft", "active", "paused", "completed"]
+      },
       "CanvasAiEditRequest": {
         "type": "object",
         "description": "What to change, in words.",
@@ -38291,7 +39744,8 @@
                   "database",
                   "database_row",
                   "form",
-                  "external_chat"
+                  "external_chat",
+                  "campaign"
                 ]
               }
             ],
@@ -39761,6 +41215,22 @@
           }
         }
       },
+      "CreateCampaign": {
+        "type": "object",
+        "description": "Request to create an empty draft campaign.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Campaign name."
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/CampaignSharing",
+            "description": "Defaults to private."
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateCanvasDocumentRequest": {
         "type": "object",
         "description": "Request for a backend-initialized native Canvas.",
@@ -40471,6 +41941,54 @@
             "description": "Team to share with, which the creator must belong to."
           }
         }
+      },
+      "CreateSendingIdentity": {
+        "type": "object",
+        "description": "Add an SMTP or SendGrid identity. The credentials are checked with the\nprovider before anything is stored, and stored encrypted.",
+        "required": ["transport", "fromEmail", "secret"],
+        "properties": {
+          "fromEmail": {
+            "type": "string",
+            "description": "The `From` address; a SendGrid sender must be verified there."
+          },
+          "fromName": {
+            "type": ["string", "null"],
+            "description": "The `From` display name."
+          },
+          "imapHost": {
+            "type": ["string", "null"],
+            "description": "IMAP host for replies; optional."
+          },
+          "imapPort": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "IMAP port; defaults to 993 with a host.",
+            "minimum": 0
+          },
+          "secret": {
+            "type": "string",
+            "description": "SMTP password (an app password for Gmail) or SendGrid API key."
+          },
+          "smtpHost": {
+            "type": ["string", "null"],
+            "description": "SMTP submission host; required for SMTP."
+          },
+          "smtpPort": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "SMTP port; required for SMTP.",
+            "minimum": 0
+          },
+          "transport": {
+            "$ref": "#/components/schemas/IdentityTransport",
+            "description": "Delivery."
+          },
+          "username": {
+            "type": ["string", "null"],
+            "description": "Login; required for SMTP."
+          }
+        },
+        "additionalProperties": false
       },
       "CreateSkillRequest": {
         "type": "object",
@@ -41497,6 +43015,56 @@
           "diarizedSpeakerId": {
             "type": "string",
             "description": "The diarization label whose rows this assignment targets."
+          }
+        }
+      },
+      "DailyStats": {
+        "type": "object",
+        "description": "Activity per day over a range, one entry per date including zero days.",
+        "required": ["days"],
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyStatsDay"
+            },
+            "description": "Days in ascending order."
+          }
+        }
+      },
+      "DailyStatsDay": {
+        "type": "object",
+        "description": "One day of a daily series.",
+        "required": ["date", "sent", "opened", "replied", "bounced"],
+        "properties": {
+          "bounced": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bounces recorded.",
+            "minimum": 0
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date in the requested time zone, YYYY-MM-DD."
+          },
+          "opened": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sent emails first opened.",
+            "minimum": 0
+          },
+          "replied": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Replies received.",
+            "minimum": 0
+          },
+          "sent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Emails sent.",
+            "minimum": 0
           }
         }
       },
@@ -47511,7 +49079,8 @@
                   "database",
                   "database_row",
                   "form",
-                  "external_chat"
+                  "external_chat",
+                  "campaign"
                 ]
               }
             ],
@@ -49477,7 +51046,8 @@
                   "database",
                   "database_row",
                   "form",
-                  "external_chat"
+                  "external_chat",
+                  "campaign"
                 ]
               }
             ],
@@ -49533,7 +51103,8 @@
                   "database",
                   "database_row",
                   "form",
-                  "external_chat"
+                  "external_chat",
+                  "campaign"
                 ]
               }
             ],
@@ -53149,6 +54720,11 @@
         "type": "integer",
         "enum": [1, 2, 3]
       },
+      "IdentityTransport": {
+        "type": "string",
+        "description": "How a sending identity delivers.",
+        "enum": ["smtp", "sendgrid"]
+      },
       "ImportCompaniesCsvRequest": {
         "type": "object",
         "description": "A companies CSV to import: exactly one of its text or a CSV file in\nMacro, and at most one of `pipelineId` or `newPipeline` for its Stage,\nOwner and Revenue values (a new private pipeline when neither is given).",
@@ -54162,6 +55738,36 @@
                 "description": "Latest top-level non-thread message."
               }
             ]
+          }
+        }
+      },
+      "LaunchCampaign": {
+        "type": "object",
+        "description": "Launch or resume. An agent launching for a user quotes the user's\napproval, which is kept on the campaign.",
+        "properties": {
+          "userConfirmation": {
+            "type": ["string", "null"],
+            "description": "The user's own words approving the launch; required from agents."
+          }
+        },
+        "additionalProperties": false
+      },
+      "LaunchOutcome": {
+        "type": "object",
+        "description": "What a launch did.",
+        "required": ["enrolled", "skipped"],
+        "properties": {
+          "enrolled": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recipients newly enrolled.",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Rows skipped: no contact, no email, or a suppressed address.",
+            "minimum": 0
           }
         }
       },
@@ -61050,6 +62656,97 @@
           }
         }
       },
+      "Recipient": {
+        "type": "object",
+        "description": "An enrolled recipient row.",
+        "required": [
+          "rowId",
+          "contactId",
+          "email",
+          "name",
+          "timeZone",
+          "state",
+          "nextPosition",
+          "nextSendAt",
+          "enrolledAt"
+        ],
+        "properties": {
+          "contactId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "CRM contact at enrollment."
+          },
+          "email": {
+            "type": "string",
+            "description": "Address at enrollment."
+          },
+          "enrolledAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Enrollment time."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Name at enrollment."
+          },
+          "nextPosition": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The step sent next.",
+            "minimum": 0
+          },
+          "nextSendAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When it is due."
+          },
+          "rowId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Row of the recipient table."
+          },
+          "state": {
+            "$ref": "#/components/schemas/RecipientState",
+            "description": "Progress."
+          },
+          "timeZone": {
+            "type": ["string", "null"],
+            "description": "Zone at enrollment; the campaign's when absent."
+          }
+        }
+      },
+      "RecipientState": {
+        "type": "string",
+        "description": "A recipient's progress through the sequence.",
+        "enum": [
+          "active",
+          "completed",
+          "replied",
+          "bounced",
+          "unsubscribed",
+          "failed",
+          "removed"
+        ]
+      },
+      "Recipients": {
+        "type": "object",
+        "description": "One page of recipients.",
+        "required": ["recipients", "next"],
+        "properties": {
+          "next": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Cursor for another page."
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Recipient"
+            },
+            "description": "Recipients in row-id order."
+          }
+        }
+      },
       "RecordEntriesRequest": {
         "type": "object",
         "description": "The companies or contacts to find entries for, across pipelines.",
@@ -61142,6 +62839,47 @@
             "description": "User ids to remove."
           }
         }
+      },
+      "RemoveRecipients": {
+        "type": "object",
+        "description": "Recipients to stop mailing.",
+        "required": ["rowIds"],
+        "properties": {
+          "rowIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Recipient rows."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RemovedRecipients": {
+        "type": "object",
+        "description": "How many recipients were stopped.",
+        "required": ["removed"],
+        "properties": {
+          "removed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recipients whose sequence stopped.",
+            "minimum": 0
+          }
+        }
+      },
+      "RenameCampaign": {
+        "type": "object",
+        "description": "Rename input.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New display name."
+          }
+        },
+        "additionalProperties": false
       },
       "RenameChannelLabelRequest": {
         "type": "object",
@@ -61257,6 +62995,128 @@
             "description": "Stages first to last."
           }
         }
+      },
+      "ReplyDraft": {
+        "type": "object",
+        "description": "A draft reply to a recipient's reply, written for the owner to review.",
+        "required": [
+          "id",
+          "campaignId",
+          "rowId",
+          "recipientEmail",
+          "sendId",
+          "inboundMessageId",
+          "threadId",
+          "inboundSubject",
+          "inboundText",
+          "status",
+          "draftSubject",
+          "draftBody",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "campaignId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The campaign."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reply was queued."
+          },
+          "draftBody": {
+            "type": "string",
+            "description": "The drafted body; empty until written."
+          },
+          "draftSubject": {
+            "type": "string",
+            "description": "The drafted subject; empty until written."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable identity."
+          },
+          "inboundMessageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Their reply in email."
+          },
+          "inboundSubject": {
+            "type": ["string", "null"],
+            "description": "Their reply's subject."
+          },
+          "inboundText": {
+            "type": ["string", "null"],
+            "description": "The start of their reply's text."
+          },
+          "recipientEmail": {
+            "type": "string",
+            "description": "The recipient's address."
+          },
+          "rowId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The recipient's row; absent once the row is deleted."
+          },
+          "sendId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The campaign email they replied to."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReplyDraftStatus",
+            "description": "Where the draft stands."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The thread the reply belongs to."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it last changed."
+          }
+        }
+      },
+      "ReplyDraftAction": {
+        "type": "string",
+        "description": "What a person or agent can do to a draft besides write it.",
+        "enum": ["dismissed"]
+      },
+      "ReplyDraftStatus": {
+        "type": "string",
+        "description": "Where a reply draft stands.",
+        "enum": ["pending", "ready", "dismissed", "sent"]
+      },
+      "ReplyDraftUpdate": {
+        "type": "object",
+        "description": "An edit to a draft. Writing text makes a pending draft ready; clearing the\nbody makes it pending again. A sent or dismissed draft cannot be changed.",
+        "properties": {
+          "body": {
+            "type": ["string", "null"],
+            "description": "New body."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReplyDraftAction",
+                "description": "`dismissed` to set the draft aside."
+              }
+            ]
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "New subject."
+          }
+        },
+        "additionalProperties": false
       },
       "RequestAccess": {
         "type": "object",
@@ -62335,6 +64195,130 @@
           }
         }
       },
+      "Sender": {
+        "type": "object",
+        "description": "A mailbox the campaign rotates through.",
+        "required": ["mailbox", "dailyCap"],
+        "properties": {
+          "dailyCap": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Most emails this mailbox sends for the campaign per day.",
+            "minimum": 0
+          },
+          "mailbox": {
+            "$ref": "#/components/schemas/SenderMailbox",
+            "description": "The mailbox."
+          }
+        }
+      },
+      "SenderMailbox": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A connected Gmail or Outlook inbox; mail lands in its Sent folder.",
+            "required": ["link_id", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["link"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The `email_links` row."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An SMTP or SendGrid identity.",
+            "required": ["identity_id", "kind"],
+            "properties": {
+              "identity_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The `campaign_sending_identities` row."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["identity"]
+              }
+            }
+          }
+        ],
+        "description": "The mailbox a sender slot sends from."
+      },
+      "SendingIdentity": {
+        "type": "object",
+        "description": "An SMTP or SendGrid mailbox a user may add to campaigns. The secret is\nnever returned.",
+        "required": [
+          "id",
+          "transport",
+          "fromEmail",
+          "fromName",
+          "smtpHost",
+          "smtpPort",
+          "imapHost",
+          "imapPort",
+          "username",
+          "verifiedAt",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "fromEmail": {
+            "type": "string",
+            "description": "The `From` address."
+          },
+          "fromName": {
+            "type": ["string", "null"],
+            "description": "The `From` display name."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identity, used as a sender's `identityId`."
+          },
+          "imapHost": {
+            "type": ["string", "null"],
+            "description": "IMAP host polled for replies and bounces."
+          },
+          "imapPort": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "IMAP port, implicit TLS.",
+            "minimum": 0
+          },
+          "smtpHost": {
+            "type": ["string", "null"],
+            "description": "SMTP submission host."
+          },
+          "smtpPort": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "SMTP submission port: 465 for implicit TLS, otherwise STARTTLS.",
+            "minimum": 0
+          },
+          "transport": {
+            "$ref": "#/components/schemas/IdentityTransport",
+            "description": "Delivery."
+          },
+          "username": {
+            "type": ["string", "null"],
+            "description": "SMTP and IMAP login."
+          },
+          "verifiedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the provider last accepted the credentials."
+          }
+        }
+      },
       "SessionDeletedMetadata": {
         "type": "object",
         "description": "The session was deleted.",
@@ -62861,6 +64845,18 @@
       "Sha256Digest": {
         "type": "string",
         "description": "SHA-256 encoded as exactly 64 lowercase hexadecimal characters."
+      },
+      "ShareCampaign": {
+        "type": "object",
+        "description": "Sharing input.",
+        "required": ["sharing"],
+        "properties": {
+          "sharing": {
+            "$ref": "#/components/schemas/CampaignSharing",
+            "description": "Desired team grant."
+          }
+        },
+        "additionalProperties": false
       },
       "ShareEntity": {
         "type": "object",
@@ -67254,6 +69250,139 @@
           }
         }
       },
+      "Step": {
+        "type": "object",
+        "description": "One email of the sequence.",
+        "required": [
+          "id",
+          "position",
+          "delayMinutes",
+          "subject",
+          "bodyHtml",
+          "bodyText",
+          "bodyMacro",
+          "condition"
+        ],
+        "properties": {
+          "bodyHtml": {
+            "type": "string",
+            "description": "HTML body template."
+          },
+          "bodyMacro": {
+            "type": ["string", "null"],
+            "description": "The composer's document, so the step reopens as written."
+          },
+          "bodyText": {
+            "type": ["string", "null"],
+            "description": "Plain-text alternative, derived from the HTML when absent."
+          },
+          "condition": {
+            "$ref": "#/components/schemas/StepCondition",
+            "description": "When to send: always, only if no earlier email was opened, or only if\none was."
+          },
+          "delayMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Wait after launch (step 1) or after the previous step's send.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable identity; sends refer to it."
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32",
+            "description": "1-based order.",
+            "minimum": 0
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject template; empty replies in the first step's thread."
+          }
+        }
+      },
+      "StepCondition": {
+        "type": "string",
+        "description": "Whether a step is sent to a recipient, judged when the step comes due by\nwhether they opened any earlier email of the sequence. A step that is not\nsent is skipped: the recipient moves on to the next step, which waits its\nown delay from the moment of the skip.",
+        "enum": ["always", "not_opened", "opened"]
+      },
+      "StepInput": {
+        "type": "object",
+        "description": "A step as written by an editor. Without an id it is new; steps left out\nare removed, unless one has already been sent.",
+        "required": ["bodyHtml"],
+        "properties": {
+          "bodyHtml": {
+            "type": "string",
+            "description": "HTML body template."
+          },
+          "bodyMacro": {
+            "type": ["string", "null"],
+            "description": "The composer's document."
+          },
+          "bodyText": {
+            "type": ["string", "null"],
+            "description": "Plain-text alternative."
+          },
+          "condition": {
+            "$ref": "#/components/schemas/StepCondition",
+            "description": "When to send; always when absent."
+          },
+          "delayMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Wait after launch (step 1) or after the previous step's send.",
+            "minimum": 0
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Existing step to keep."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject template; empty replies in the first step's thread."
+          }
+        },
+        "additionalProperties": false
+      },
+      "StepStats": {
+        "type": "object",
+        "description": "Counts for one step.",
+        "required": ["stepId", "sent", "opened", "replied", "bounced"],
+        "properties": {
+          "bounced": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bounced.",
+            "minimum": 0
+          },
+          "opened": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Opened at least once.",
+            "minimum": 0
+          },
+          "replied": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Answered.",
+            "minimum": 0
+          },
+          "sent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Emails sent.",
+            "minimum": 0
+          },
+          "stepId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The step."
+          }
+        }
+      },
       "StopTimerRequest": {
         "type": "object",
         "description": "Stop the caller's timer.",
@@ -69175,6 +71304,18 @@
             "description": "Wall-clock when the transcriber's STT stream first received audio\nfor this participant. The server takes the earliest non-null value\nacross all participants and uses it to overwrite the\n`egress_started`-derived `recording_started_at`, which is too early\n(it stamps egress bootstrap, not first audio frame)."
           }
         }
+      },
+      "TrashCampaign": {
+        "type": "object",
+        "description": "Trash/restore input.",
+        "required": ["trashed"],
+        "properties": {
+          "trashed": {
+            "type": "boolean",
+            "description": "True to trash; false to restore."
+          }
+        },
+        "additionalProperties": false
       },
       "TrashPipeline": {
         "type": "object",

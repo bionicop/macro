@@ -810,7 +810,9 @@ impl IntoResponse for CampaignError {
                     }
                     DatabaseError::NotFound => StatusCode::NOT_FOUND,
                     DatabaseError::Unauthorized => StatusCode::FORBIDDEN,
-                    DatabaseError::InvalidSchemaOperation(_) | DatabaseError::InvalidSharing(_) => {
+                    DatabaseError::InvalidSchemaOperation(_)
+                    | DatabaseError::InvalidSharing(_)
+                    | DatabaseError::InvalidAppearance(_) => {
                         StatusCode::BAD_REQUEST
                     }
                     DatabaseError::RowInUse

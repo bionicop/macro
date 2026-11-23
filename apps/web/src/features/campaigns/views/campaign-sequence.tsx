@@ -302,8 +302,6 @@ export function CampaignSequence(props: {
         )}
       >
         {/* The editor needs the room; the palette comes back when it closes. */}
-        <Show when={selected() === undefined}></Show>
-
         <div class="flex min-w-0 flex-1 flex-col">
           <div class="flex h-11 shrink-0 items-center gap-3 overflow-hidden border-b border-edge-muted px-3 text-xs whitespace-nowrap text-ink-muted">
             <span class="tabular-nums">

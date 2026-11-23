@@ -121,7 +121,7 @@ fn cell_text(value: &PropertyValue, column: &ColumnDetail) -> Option<String> {
         PropertyValue::Str(text) => text.clone(),
         PropertyValue::Num(number) => number.to_string(),
         PropertyValue::Bool(value) => if *value { "Yes" } else { "No" }.into(),
-        PropertyValue::Date(date) => date.format("%B %-d, %Y").to_string(),
+        PropertyValue::Date(date) => date.at().format("%B %-d, %Y").to_string(),
         PropertyValue::Link(links) => links.join(", "),
         PropertyValue::SelectOption(ids) => ids
             .iter()

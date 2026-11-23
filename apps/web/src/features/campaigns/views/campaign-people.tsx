@@ -160,7 +160,7 @@ export function CampaignPeople(props: {
   };
   const toggleAll = (on: boolean) =>
     setSelected(
-      on ? new Set(shown().map((recipient) => recipient.rowId)) : new Set()
+      on ? new Set(shown().map((recipient) => recipient.rowId)) : new Set<string>()
     );
   const removable = () =>
     visibleSelected().filter((recipient) => recipient.state === 'active');

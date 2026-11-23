@@ -5547,6 +5547,10 @@ enum GraphqlEntityType {
 	"""
 	EXTERNAL_CHAT
 	"""
+	Outreach campaign entity.
+	"""
+	CAMPAIGN
+	"""
 	Schema-only stub for clients released with this value before external
 	chats replaced WhatsApp groups. Never returned; rejected as input.
 	"""

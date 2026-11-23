@@ -192,6 +192,7 @@ import {
   editSpreadsheetHandler,
   readSpreadsheetHandler,
 } from './Spreadsheet';
+import { campaignToolHandlers } from './CampaignTools';
 import { subagentHandler } from './Subagent';
 import { getTeamAvailabilityHandler } from './TeamAvailability';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
@@ -214,6 +215,7 @@ import {
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
+  ...campaignToolHandlers,
   ExecuteCode: executeCodeHandler,
   DescribeCodeTools: describeCodeToolsHandler,
   ReadCodeDocs: readCodeDocsHandler,

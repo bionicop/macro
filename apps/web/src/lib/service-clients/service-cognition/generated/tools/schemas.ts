@@ -3,6 +3,16 @@
  */
 import { z } from 'zod/v3';
 
+export const AddCampaignRecipients = z.object({
+  campaignId: z.string().uuid(),
+  contactIds: z.array(z.string().uuid()),
+  timeZone: z.union([z.string(), z.null()]).optional(),
+});
+
+export const AddCampaignRecipientsResponse = z.object({
+  rowIds: z.array(z.string().uuid()),
+});
+
 export const AddSharedCalendarEvent = z.object({
   eventId: z.string().uuid(),
   calendarId: z.union([z.string().uuid(), z.null()]).optional(),
@@ -2470,6 +2480,39 @@ export const UserToolResponseForToolCalendarEvent = z
       });
     }
   });
+
+export const CreateCampaign = z.object({
+  name: z.string(),
+  sharing: z
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('private'), z.literal('team')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('private')
+    )
+    .optional(),
+});
+
+export const CreateCampaignResponse = z.object({
+  campaignId: z.string().uuid(),
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+});
 
 export const CreateChannel = z.object({
   name: z.string(),
@@ -6142,6 +6185,103 @@ export const EditBookingLink = z
     userConfirmation: z.string(),
   })
   .strict();
+
+export const EditCampaign = z.object({
+  campaignId: z.string().uuid(),
+  name: z.union([z.string(), z.null()]).optional(),
+  sharing: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('private'), z.literal('team')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  settings: z
+    .union([
+      z.object({
+        timeZone: z.string(),
+        windowStartMinute: z.number().int().gte(0).lte(65535),
+        windowEndMinute: z.number().int().gte(0).lte(65535),
+        sendDays: z.number().int().gte(0).lte(255),
+        stopOnReply: z.boolean(),
+        trackOpens: z.boolean(),
+        autoDraftReplies: z.union([z.boolean(), z.null()]).optional(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  steps: z
+    .union([
+      z.array(
+        z.object({
+          id: z.union([z.string().uuid(), z.null()]).optional(),
+          delayMinutes: z.number().int().gte(0),
+          subject: z.string(),
+          bodyHtml: z.string(),
+          condition: z
+            .intersection(
+              z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z.literal('always'),
+                  z.literal('not_opened'),
+                  z.literal('opened'),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              z.any()
+            )
+            .optional(),
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
+  senders: z
+    .union([
+      z.array(
+        z.object({
+          inboxId: z.union([z.string().uuid(), z.null()]).optional(),
+          identityId: z.union([z.string().uuid(), z.null()]).optional(),
+          dailyCap: z.number().int().gte(0),
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
+});
+
+export const EditCampaignResponse = z.object({ updated: z.array(z.string()) });
 
 export const EditCanvas = z.object({
   document_id: z.string(),
@@ -10980,6 +11120,73 @@ export const GetBotWebhooksResponse = z.object({
   summary: z.string(),
 });
 
+export const GetCampaign = z.object({ campaignId: z.string().uuid() });
+
+export const GetCampaignResponse = z.object({
+  campaignId: z.string().uuid(),
+  name: z.string(),
+  status: z.string(),
+  access: z.string(),
+  databaseId: z.string().uuid(),
+  launchedAt: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .optional(),
+  tableId: z.string().uuid(),
+  settings: z.object({
+    timeZone: z.string(),
+    windowStartMinute: z.number().int().gte(0).lte(65535),
+    windowEndMinute: z.number().int().gte(0).lte(65535),
+    sendDays: z.number().int().gte(0).lte(255),
+    stopOnReply: z.boolean(),
+    trackOpens: z.boolean(),
+    autoDraftReplies: z.union([z.boolean(), z.null()]).optional(),
+  }),
+  steps: z.array(
+    z.object({
+      id: z.union([z.string().uuid(), z.null()]).optional(),
+      delayMinutes: z.number().int().gte(0),
+      subject: z.string(),
+      bodyHtml: z.string(),
+      condition: z
+        .intersection(
+          z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.literal('always'),
+              z.literal('not_opened'),
+              z.literal('opened'),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          }),
+          z.any().default('always')
+        )
+        .optional(),
+    })
+  ),
+  senders: z.array(
+    z.object({
+      inboxId: z.union([z.string().uuid(), z.null()]).optional(),
+      identityId: z.union([z.string().uuid(), z.null()]).optional(),
+      dailyCap: z.number().int().gte(0),
+    })
+  ),
+  stats: z.any(),
+});
+
 export const GetCompany = z.object({ company_id: z.string().uuid() });
 
 export const GetCompanyResponse = z.object({
@@ -11833,6 +12040,16 @@ export const IssueBotCredentialResponse = z.object({
   summary: z.string(),
 });
 
+export const LaunchCampaign = z.object({
+  campaignId: z.string().uuid(),
+  userConfirmation: z.string(),
+});
+
+export const LaunchCampaignResponse = z.object({
+  enrolled: z.number().int().gte(0),
+  skipped: z.number().int().gte(0),
+});
+
 export const ListAgentUpdates = z.record(z.never());
 
 export const AgentUpdates = z.object({
@@ -12337,6 +12554,33 @@ export const ListCalendarsToolResponse = z.object({
     })
   ),
   summary: z.string(),
+});
+
+export const ListCampaignRecipients = z.object({
+  campaignId: z.string().uuid(),
+  after: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const ListCampaignRecipientsResponse = z.object({
+  recipients: z.any(),
+  next: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const ListCampaigns = z.record(z.any());
+
+export const ListCampaignsResponse = z.object({
+  campaigns: z.array(
+    z.object({
+      campaignId: z.string().uuid(),
+      name: z.string(),
+      status: z.string(),
+      access: z.string(),
+      databaseId: z.string().uuid(),
+      launchedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+    })
+  ),
 });
 
 export const ListCodingAgents = z.record(z.never());
@@ -13473,6 +13717,13 @@ export const ListPipelinesResponse = z.object({
   summary: z.string(),
 });
 
+export const ListReplyDrafts = z.object({
+  campaignId: z.string().uuid(),
+  status: z.union([z.string(), z.null()]).optional(),
+});
+
+export const ListReplyDraftsResponse = z.object({ drafts: z.any() });
+
 export const ListRoutines = z.object({
   query: z.union([z.string(), z.null()]).optional(),
   enabled: z.union([z.boolean(), z.null()]).optional(),
@@ -14088,6 +14339,10 @@ export const OpenDirectMessageResponse = z.object({
   participants: z.array(z.string()),
   summary: z.string(),
 });
+
+export const PauseCampaign = z.object({ campaignId: z.string().uuid() });
+
+export const PauseCampaignResponse = z.object({ paused: z.boolean() });
 
 export const QueryDatabase = z.object({
   sql: z.string(),
@@ -18401,6 +18656,15 @@ export const ReadWordDocument = z.object({
   count: z.union([z.number().int().gte(0), z.null()]).optional(),
 });
 
+export const RemoveCampaignRecipients = z.object({
+  campaignId: z.string().uuid(),
+  rowIds: z.array(z.string().uuid()),
+});
+
+export const RemoveCampaignRecipientsResponse = z.object({
+  removed: z.number().int().gte(0),
+});
+
 export const RemoveFromPipeline = z.object({
   pipelineId: z.string().uuid(),
   entryIds: z.array(z.string().uuid()).optional(),
@@ -20257,6 +20521,16 @@ export const UpdatePipelineEntriesResponse = z.object({
   version: z.union([z.number().int(), z.null()]).optional(),
   summary: z.string(),
 });
+
+export const UpdateReplyDraft = z.object({
+  campaignId: z.string().uuid(),
+  draftId: z.string().uuid(),
+  subject: z.union([z.string(), z.null()]).optional(),
+  body: z.union([z.string(), z.null()]).optional(),
+  status: z.union([z.string(), z.null()]).optional(),
+});
+
+export const UpdateReplyDraftResponse = z.object({ draft: z.any() });
 
 export const UpdateRoutine = z.object({
   routineId: z.string().uuid(),

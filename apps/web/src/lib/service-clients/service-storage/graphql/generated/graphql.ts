@@ -1583,6 +1583,8 @@ export type GraphqlEntityType =
   | 'CALENDAR_EVENT'
   /** Call entity. */
   | 'CALL'
+  /** Outreach campaign entity. */
+  | 'CAMPAIGN'
   /** Channel entity. */
   | 'CHANNEL'
   /** Channel message entity. */
