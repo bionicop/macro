@@ -8,6 +8,7 @@ import {
   calendarPeriodPath,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { CAMPAIGN_SECTIONS } from '@app/features/campaigns/core/sections';
 import { changesSearch } from '@app/features/changes/changes-search';
 import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
 import {
@@ -691,6 +692,23 @@ export const callsRoute = defineRoute({
   path: 'calls',
   search: '*' as const,
   claim: () => ({ namespace: 'component', id: 'calls' }),
+});
+
+export const campaignsRoute = defineRoute({
+  id: 'view-campaigns',
+  path: 'campaigns',
+  claim: () => ({ namespace: 'component', id: 'campaigns' }),
+});
+
+export const campaignsCampaignRoute = defineRoute({
+  id: 'campaigns-campaign',
+  path: 'campaign/:campaignId/:section?/:stepId?',
+  params: z.object({
+    campaignId: z.string().min(1),
+    section: z.enum(CAMPAIGN_SECTIONS).default('overview'),
+    /** One email of the sequence, opened from the overview's plan. */
+    stepId: z.string().min(1).optional(),
+  }),
 });
 
 export const callsCallRoute = defineRoute({

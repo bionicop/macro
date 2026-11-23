@@ -424,7 +424,7 @@ function BackfillProgressBar(props: { progress: BackfillProgress }) {
   );
 }
 
-function Chip(props: { label: string }) {
+export function Chip(props: { label: string }) {
   return (
     <span class="shrink-0 rounded bg-edge-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted">
       {props.label}
@@ -456,7 +456,7 @@ function DisabledPrimaryRow(props: { email: string; onEnable: () => void }) {
   );
 }
 
-function ProviderIcon(props: { provider: EmailLink['provider'] }) {
+export function ProviderIcon(props: { provider: EmailLink['provider'] }) {
   return (
     <span
       aria-hidden="true"

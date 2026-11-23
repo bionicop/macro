@@ -3,19 +3,29 @@ import { Dropdown } from '@ui';
 import { For, onCleanup, Show } from 'solid-js';
 import { EVENT_EDITOR_STEPS, type EventEditorStep } from '../core/event-editor';
 
-/** A visual and accessible progress indicator for the booking-link editor. */
-export function EventEditorProgress(props: { step: number }) {
-  const currentStep = () => EVENT_EDITOR_STEPS[props.step];
+type EditorStep<Id extends string> = { id: Id; heading: string };
+
+/**
+ * A visual and accessible progress indicator for the booking-link editor.
+ * Other step editors pass their own `steps` and `label`.
+ */
+export function EventEditorProgress(props: {
+  step: number;
+  steps?: readonly EditorStep<string>[];
+  label?: string;
+}) {
+  const steps = () => props.steps ?? EVENT_EDITOR_STEPS;
+  const currentStep = () => steps()[props.step]!;
   const position = () => props.step + 1;
-  const total = EVENT_EDITOR_STEPS.length;
+  const total = () => steps().length;
   return (
     <div
       role="progressbar"
-      aria-label="Booking setup progress"
+      aria-label={props.label ?? 'Booking setup progress'}
       aria-valuemin={0}
-      aria-valuemax={total}
+      aria-valuemax={total()}
       aria-valuenow={position()}
-      aria-valuetext={`Step ${position()} of ${total}: ${currentStep().heading}`}
+      aria-valuetext={`Step ${position()} of ${total()}: ${currentStep().heading}`}
       aria-live="polite"
       aria-atomic="true"
       class="h-2 w-16 shrink-0 overflow-hidden rounded-full bg-active sm:w-20"
@@ -23,21 +33,28 @@ export function EventEditorProgress(props: { step: number }) {
       <div
         aria-hidden="true"
         class="h-full rounded-full bg-accent transition-[width] duration-200 motion-reduce:transition-none"
-        style={{ width: `${(position() / total) * 100}%` }}
+        style={{ width: `${(position() / total()) * 100}%` }}
       />
     </div>
   );
 }
 
 /** The current step number opens the editor's step navigation menu. */
-export function EventEditorStepMenu(props: {
+export function EventEditorStepMenu<
+  Id extends string = EventEditorStep,
+>(props: {
   step: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   disabled: boolean;
-  onStep: (step: EventEditorStep) => void;
+  onStep: (step: Id) => void;
+  steps?: readonly EditorStep<Id>[];
+  /** Steps that can't be reached yet are shown but disabled. */
+  reachable?: (index: number) => boolean;
 }) {
-  let pendingStep: EventEditorStep | undefined;
+  const steps = () =>
+    props.steps ?? (EVENT_EDITOR_STEPS as readonly EditorStep<Id>[]);
+  let pendingStep: Id | undefined;
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -54,7 +71,7 @@ export function EventEditorStepMenu(props: {
         type="button"
         variant="ghost"
         size="icon-md"
-        aria-label={`Jump to step, current step ${props.step + 1} of ${EVENT_EDITOR_STEPS.length}`}
+        aria-label={`Jump to step, current step ${props.step + 1} of ${steps().length}`}
         disabled={props.disabled}
         class="text-xl font-medium leading-snug tracking-wide text-ink"
       >
@@ -79,12 +96,14 @@ export function EventEditorStepMenu(props: {
         }}
       >
         <Dropdown.Group>
-          <For each={EVENT_EDITOR_STEPS}>
+          <For each={steps()}>
             {(step, index) => (
               <Dropdown.Item
                 aria-label={`Step ${index() + 1}: ${step.heading}`}
                 aria-current={index() === props.step ? 'step' : undefined}
-                disabled={props.disabled}
+                disabled={
+                  props.disabled || props.reachable?.(index()) === false
+                }
                 onSelect={() => {
                   pendingStep = index() === props.step ? undefined : step.id;
                 }}

@@ -83,6 +83,10 @@ export const MeetingRouter = lazyNamed(
   () => import('@app/features/meetings/meeting-router'),
   'MeetingRouter'
 );
+export const CampaignsRouteView = lazyNamed(
+  () => import('@app/features/campaigns/route-views'),
+  'CampaignsRouteView'
+);
 export const CallsRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'CallsRouteView'

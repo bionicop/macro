@@ -28,6 +28,7 @@ import {
   createSessionAttachmentTracker,
   createSessionComposerDraft,
 } from '../primitives/session-composer-draft';
+import { sentPrompts } from '../primitives/prompt-history';
 import {
   changingConfig,
   changingModel,
@@ -302,6 +303,12 @@ export function AgentComposer(props: {
       <Input
         initialInput={initialInput}
         draft={persistedDraft.draft()}
+        promptHistory={() => sentPrompts(messages())}
+        onRestoreAttachments={(attachments, transient) =>
+          transient
+            ? attachmentTracker.previewAttachments(attachments)
+            : attachmentTracker.setAttachments(attachments)
+        }
         onDraftChange={persistedDraft.setDraft}
         placeholder={
           readOnly()

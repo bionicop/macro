@@ -54,10 +54,16 @@ import {
   createSignal,
   type JSX,
   Match,
+  mergeProps,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import {
+  createHistoryCursor,
+  registerHistoryRecall,
+} from '@core/component/LexicalMarkdown/plugins/history-recall';
 import {
   DictationButton,
   DictationFeedback,
@@ -143,6 +149,12 @@ const RICH_BLOCK_ACTION_IDS = [
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
+  /**
+   * Earlier messages to recall with Up (caret at the very start) and Down
+   * (caret at the very end), oldest first. Taken from the stored conversation
+   * so recall survives a reload.
+   */
+  history?: () => InputSnapshot[];
   parent?: MessageParent;
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
@@ -248,6 +260,9 @@ function DefaultActions(props: {
 }
 
 export function ChannelInput(props: ChannelInputProps) {
+  const recall = createHistoryCursor<InputSnapshot>(
+    () => props.history?.() ?? []
+  );
   const features = (): ChannelInputFeatures => ({
     ...ALL_FEATURES,
     ...props.features,
@@ -272,7 +287,12 @@ export function ChannelInput(props: ChannelInputProps) {
     input: props.input,
     attachmentTracker: props.attachmentTracker,
     persistenceKey: props.persistenceKey,
-    callbacks: props,
+    callbacks: mergeProps(props, {
+      onSend: (snapshot: InputSnapshot) => {
+        recall.reset();
+        return props.onSend?.(snapshot);
+      },
+    }),
     onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
     restoreEditor: (snapshot) => restoreFailedSend(snapshot),
@@ -325,6 +345,31 @@ export function ChannelInput(props: ChannelInputProps) {
   };
   restoreFailedSend = (snapshot) => {
     applySnapshot(snapshot, { focus: false });
+  };
+
+  let unregisterRecall: (() => void) | undefined;
+  onCleanup(() => unregisterRecall?.());
+  const connectHistoryRecall = () => {
+    if (unregisterRecall || !props.history) return;
+    unregisterRecall = registerHistoryRecall(lexicalEditor(), {
+      cursor: recall,
+      enabled: () => !dictation.active(),
+      current: () => inputState.snapshot(),
+      show: (entry) => {
+        // Recalled text and files are shown, not saved as the draft.
+        inputState.setPreviewing(recall.browsing());
+        acceptTyping = false;
+        markdownEditor.controls.setMarkdown(entry.value);
+        mentionsTracker.setMentions(entry.mentions);
+        attachmentTracker.previewAttachments(
+          recall.browsing() ? entry.attachments : undefined
+        );
+        queueMicrotask(() => {
+          acceptTyping = true;
+        });
+        setTimeout(() => lexicalEditor().update(() => $getRoot().selectEnd()), 0);
+      },
+    });
   };
 
   const flushPendingRestore = () => {
@@ -819,6 +864,7 @@ export function ChannelInput(props: ChannelInputProps) {
                   refFn={attach}
                   onConnect={() => {
                     isEditorConnected = true;
+                    connectHistoryRecall();
                     flushPendingRestore();
                     flushPendingFocus();
                     queueMicrotask(() => {

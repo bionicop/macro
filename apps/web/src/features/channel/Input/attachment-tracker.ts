@@ -9,6 +9,8 @@ export type InputAttachmentTracker = {
   removeAttachment: (attachmentId: string) => void;
   setAttachmentPending: (attachmentId: string, pending: boolean) => void;
   setAttachments: (attachments: InputAttachmentData[]) => void;
+  /** Show files in the composer without saving them as the draft (recalled history). `undefined` ends the preview. */
+  previewAttachments: (attachments: InputAttachmentData[] | undefined) => void;
   clearAttachments: () => void;
 };
 
@@ -25,7 +27,7 @@ export function createInputAttachmentTracker(
     options.initialAttachments ?? []
   );
 
-  const [attachments, setAttachments] = options.persistenceKey
+  const [stored, setStored] = options.persistenceKey
     ? makePersisted(raw, {
         name: options.persistenceKey,
         serialize: (data: InputAttachmentData[]) =>
@@ -34,6 +36,16 @@ export function createInputAttachmentTracker(
           (JSON.parse(data) as InputAttachmentData[]).filter((a) => !a.pending),
       })
     : raw;
+
+  const [preview, setPreview] = createSignal<InputAttachmentData[]>();
+  const attachments = () => preview() ?? stored();
+  // Editing recalled files makes them the draft.
+  const setAttachments: typeof setStored = (next) => {
+    const shown = preview();
+    setPreview(undefined);
+    if (shown) setStored(shown);
+    return setStored(next);
+  };
 
   const maxAttachments = options.maxAttachments ?? 10;
 
@@ -64,7 +76,8 @@ export function createInputAttachmentTracker(
   };
 
   const replaceAttachments = (nextAttachments: InputAttachmentData[]) => {
-    setAttachments(nextAttachments);
+    setPreview(undefined);
+    setStored(nextAttachments);
   };
 
   const clearAttachments = () => {
@@ -78,6 +91,7 @@ export function createInputAttachmentTracker(
     removeAttachment,
     setAttachmentPending,
     setAttachments: replaceAttachments,
+    previewAttachments: setPreview,
     clearAttachments,
   };
 }

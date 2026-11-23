@@ -4,6 +4,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { MailCampaignsSection } from '@app/features/campaigns/components/mail-campaigns-section';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -251,6 +252,12 @@ export function EmailSidebar() {
         </Show>
 
         <EmailNavigation />
+
+        <MailCampaignsSection
+          inboxIds={state.inboxIds}
+          open={isSidebarSectionOpen('campaigns')}
+          onOpenChange={(open) => setSidebarSectionOpen('campaigns', open)}
+        />
 
         <div ref={tourTarget(EMAIL_TOUR.tags)}>
           <SidebarTagsSection

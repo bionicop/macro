@@ -1,3 +1,17 @@
+// LOCAL MOCK (not for commit): fake signed-in user so the shell loads without a backend.
+// ?mock=0 / ?mock=1 is remembered in localStorage ('dev:mock').
+const mockParam = new URLSearchParams(location.search).get('mock');
+if (mockParam === '0' && localStorage.getItem('dev:mock') !== '0') {
+  localStorage.setItem('dev:mock', '0');
+  localStorage.removeItem('macro:login');
+} else if (mockParam === '1') localStorage.setItem('dev:mock', '1');
+if (import.meta.env.DEV && localStorage.getItem('dev:mock') !== '0') {
+  localStorage.setItem('macro:login', 'true');
+  const realFetch = window.fetch.bind(window);
+  const mock = import('./dev-mock');
+  window.fetch = async (input, init) =>
+    (await (await mock).handle(input, init)) ?? realFetch(input, init);
+}
 import { initializeBrowserObservability } from './observability/browser';
 import './index.css';
 

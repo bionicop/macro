@@ -41,6 +41,12 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import {
+  createHistoryCursor,
+  registerHistoryRecall,
+} from '@core/component/LexicalMarkdown/plugins/history-recall';
+import type { PromptEntry } from '../primitives/prompt-history';
+import { $getRoot } from 'lexical';
+import {
   createEffect,
   createSignal,
   type JSX,
@@ -117,9 +123,21 @@ export interface AgentInputProps {
   /** Ref-style: how the queue's Down-past-the-end refocuses this input;
    *  `undefined` again on unmount. */
   registerFocus?: (focus: (() => void) | undefined) => void;
+  /** Prompts already sent in this session, oldest first, for Up/Down recall. */
+  promptHistory?: () => PromptEntry[];
+  /** Put a recalled prompt's files back into the composer. */
+  onRestoreAttachments?: (
+    attachments: InputAttachmentData[],
+    /** True while walking earlier prompts: show them, do not save them as the draft's files. */
+    transient: boolean
+  ) => void;
 }
 
 export function AgentInput(props: AgentInputProps) {
+  const promptHistory = createHistoryCursor<PromptEntry>(
+    () => props.promptHistory?.() ?? []
+  );
+
   const [attachDrawerOpen, setAttachDrawerOpen] = createSignal(false);
   const imageUnsupportedReason = () =>
     props.supportsImages === false
@@ -129,8 +147,18 @@ export function AgentInput(props: AgentInputProps) {
       : undefined;
   const [owned, setOwned] = createSignal(props.initialInput ?? '');
   const controlled = () => props.onDraftChange !== undefined;
-  const markdown = () => (controlled() ? (props.draft ?? '') : owned());
+  // While walking earlier prompts the box shows a recalled prompt that is not
+  // the draft: it is kept here, never saved, so a reload brings back the real
+  // draft and Down past the newest prompt returns to it.
+  const [recalled, setRecalled] = createSignal<string>();
+  const markdown = () =>
+    recalled() ?? (controlled() ? (props.draft ?? '') : owned());
   const setMarkdown = (value: string) => {
+    if (promptHistory.browsing()) {
+      setRecalled(value);
+      return;
+    }
+    setRecalled(undefined);
     if (props.onDraftChange) props.onDraftChange(value);
     else setOwned(value);
   };
@@ -195,9 +223,12 @@ export function AgentInput(props: AgentInputProps) {
     if (!canSend()) return;
     const content = markdown().trim();
     const attached = attachments();
+    promptHistory.reset();
     setMarkdown('');
-    editor.controls.clear();
     props.onSend(content, attached);
+    // Clear after the Enter command has finished: clearing inside it mutates
+    // a frozen Lexical selection and leaves the sent text in the box.
+    setTimeout(() => editor.controls.clear(), 0);
   };
 
   const editor = buildConfig('chat')
@@ -258,7 +289,26 @@ export function AgentInput(props: AgentInputProps) {
     }
   );
 
+  // Up on the first line and Down on the last line walk earlier prompts, like
+  // a terminal. Registered ahead of the keyboard-focus plugin so history wins
+  // over its start/end handling, except when a queued prompt owns Up.
   onMount(() => {
+    const unregister = registerHistoryRecall(editor.lexical, {
+      cursor: promptHistory,
+      enabled: () => !props.readOnly && !props.onNavigateUp,
+      current: () => ({ value: markdown(), attachments: attachments() }),
+      show: (entry) => {
+        setMarkdown(entry.value);
+        editor.controls.setMarkdown(entry.value);
+        props.onRestoreAttachments?.(
+          entry.attachments,
+          promptHistory.browsing()
+        );
+        // Caret to the end so a further Up/Down keeps walking.
+        setTimeout(() => editor.lexical.update(() => $getRoot().selectEnd()), 0);
+      },
+    });
+    onCleanup(unregister);
     props.registerFocus?.(() => editor.controls.focus());
     onCleanup(() => props.registerFocus?.(undefined));
     props.registerQuoteInsert?.((text) => {

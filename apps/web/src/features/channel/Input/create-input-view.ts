@@ -31,6 +31,8 @@ export type InputView = {
   showFormatRibbon: Accessor<boolean>;
   isSending: Accessor<boolean>;
   setValue: (value: string) => void;
+  /** While on, `setValue` is held in memory only (recalled history). */
+  setPreviewing: (on: boolean) => void;
   setShowFormatRibbon: (updater: (prev: boolean) => boolean) => void;
   setIsSending: (value: boolean) => void;
   setIsDraggedOver: (value: boolean) => void;
@@ -44,7 +46,11 @@ export function createInputView(options: CreateInputViewOptions): InputView {
   const [persistedValue, setValueSignal] = options.persistenceKey
     ? makePersisted(rawValue, { name: options.persistenceKey })
     : rawValue;
-  const value = () => persistedValue() ?? '';
+  // Text brought back by Up/Down recall is shown but never saved as the draft,
+  // so a reload shows what the user was really writing.
+  const [preview, setPreview] = createSignal<string>();
+  let previewing = false;
+  const value = () => preview() ?? persistedValue() ?? '';
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(
     !!options.initialInput.showFormatRibbon
@@ -81,10 +87,21 @@ export function createInputView(options: CreateInputViewOptions): InputView {
   );
 
   const setValue = (nextValue: string) => {
+    if (previewing) {
+      setPreview(nextValue);
+      return;
+    }
+    setPreview(undefined);
     setValueSignal(nextValue || undefined);
   };
 
+  const setPreviewing = (on: boolean) => {
+    previewing = on;
+    if (!on) setPreview(undefined);
+  };
+
   const reset = () => {
+    setPreviewing(false);
     setValue('');
     options.attachmentTracker.clearAttachments();
   };
@@ -96,6 +113,7 @@ export function createInputView(options: CreateInputViewOptions): InputView {
     showFormatRibbon,
     isSending,
     setValue,
+    setPreviewing,
     setShowFormatRibbon,
     setIsSending,
     setIsDraggedOver,

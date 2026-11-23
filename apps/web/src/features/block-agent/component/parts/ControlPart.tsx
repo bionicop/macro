@@ -11,6 +11,7 @@
 
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import type { MessagePart } from '@service-agent-fold/generated/types';
+import { Show } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { ActionLine } from '../../ui';
 
@@ -80,11 +81,20 @@ export function ControlPart(props: { part: ControlPartData }) {
       ? props.part.outcome.message
       : undefined;
 
+  // Model and effort switches are already visible in the composer, so only
+  // surface a control line when something went wrong or the context changed.
+  const visible = () =>
+    rejection() !== undefined ||
+    props.part.control.kind === 'compact' ||
+    props.part.control.kind === 'stop';
+
   return (
-    <ActionLine
-      label={label(props.part)}
-      failed={rejection() !== undefined}
-      detail={rejection()}
-    />
+    <Show when={visible()}>
+      <ActionLine
+        label={label(props.part)}
+        failed={rejection() !== undefined}
+        detail={rejection()}
+      />
+    </Show>
   );
 }

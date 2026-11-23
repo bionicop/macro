@@ -173,7 +173,7 @@ describe('on a touch device', () => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
   });
 
-  it('leaves Enter to the virtual keyboard and sends only from the button', () => {
+  it('leaves Enter to the virtual keyboard and sends only from the button', async () => {
     const onSend = vi.fn();
     render(() => <AgentInput onSend={onSend} />);
 
@@ -185,7 +185,8 @@ describe('on a touch device', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(onSend).toHaveBeenCalledWith('first line', []);
-    expect(editor.clear).toHaveBeenCalledOnce();
+    // The editor is cleared on the next tick, after the send handler runs.
+    await vi.waitFor(() => expect(editor.clear).toHaveBeenCalled());
   });
 });
 
@@ -211,7 +212,7 @@ describe('while the agent is working', () => {
     expect(onStop).not.toHaveBeenCalled();
   });
 
-  it('never stops the turn from Enter on an empty draft', () => {
+  it('never stops the turn from Enter on an empty draft', async () => {
     const onSend = vi.fn();
     const onStop = vi.fn();
 
@@ -225,7 +226,8 @@ describe('while the agent is working', () => {
 
     expect(onSend).toHaveBeenCalledWith('another request', []);
     expect(onStop).not.toHaveBeenCalled();
-    expect(editor.clear).toHaveBeenCalledOnce();
+    // The editor is cleared on the next tick, after the send handler runs.
+    await vi.waitFor(() => expect(editor.clear).toHaveBeenCalled());
   });
 
   it('sends attached files instead of advancing past them', () => {

@@ -47,7 +47,7 @@ function fileExtension(name: string): string | undefined {
 }
 
 /** Last path segment of a static-file URL — the lightbox download name. */
-function staticFileIdFromUri(uri: string): string {
+export function staticFileIdFromUri(uri: string): string {
   try {
     const last = new URL(uri).pathname.split('/').filter(Boolean).at(-1);
     return last ?? uri;

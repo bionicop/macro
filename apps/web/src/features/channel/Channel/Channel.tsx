@@ -133,6 +133,7 @@ import { createChannelMessageActions } from './create-channel-message-actions';
 import { createChannelUnreadNavigation } from './create-channel-unread-navigation';
 import { createDeleteMessageConfirmation } from './create-delete-message-confirmation';
 import { createMessageEditor } from './create-message-editor';
+import { buildMessageEditSnapshot } from './message-editing';
 import { createMessageSelection } from './create-message-selection';
 import {
   clearStaleRestoredChannelData,
@@ -1322,6 +1323,22 @@ export function Channel(props: ChannelProps) {
                                 }}
                                 participants={participants.users}
                                 bots={channelBotMentionUsers}
+                                history={() =>
+                                  messages()
+                                    .filter(
+                                      (message) =>
+                                        message.kind !== 'call_root' &&
+                                        !message.thread_id &&
+                                        !message.deleted_at &&
+                                        message.sender_id === userId()
+                                    )
+                                    .map(buildMessageEditSnapshot)
+                                    .filter(
+                                      (snapshot) =>
+                                        snapshot.value.trim() ||
+                                        snapshot.attachments.length > 0
+                                    )
+                                }
                                 attachmentTracker={attachmentTracker}
                                 persistenceKey={makeInputValuePersistenceKey({
                                   channelId: props.channelId,

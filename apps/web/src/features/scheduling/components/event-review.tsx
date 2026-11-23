@@ -31,9 +31,9 @@ import { meetingPlaceLabel } from '../core/types';
 import { BookingFieldInfo } from './booking-field-info';
 import { FieldError } from './fields';
 
-type ReviewIcon = Component<{ class: string; 'aria-hidden'?: 'true' }>;
+export type ReviewIcon = Component<{ class: string; 'aria-hidden'?: 'true' }>;
 
-function ReviewSection(props: {
+export function ReviewSection(props: {
   label: string;
   icon: ReviewIcon;
   headingAction?: JSX.Element;
@@ -59,7 +59,7 @@ function ReviewSection(props: {
   );
 }
 
-function ReviewValue(props: { label: string; children: JSX.Element }) {
+export function ReviewValue(props: { label: string; children: JSX.Element }) {
   return (
     <div class="flex min-w-0 flex-col gap-0.5">
       <dt class="text-xs font-medium leading-relaxed text-ink-muted">

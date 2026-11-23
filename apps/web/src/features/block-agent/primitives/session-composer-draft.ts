@@ -187,6 +187,7 @@ export function createSessionAttachmentTracker(
       tracker.setAttachments(attachments);
       persist();
     },
+    previewAttachments: tracker.previewAttachments,
     clearAttachments: () => {
       tracker.clearAttachments();
       persist();

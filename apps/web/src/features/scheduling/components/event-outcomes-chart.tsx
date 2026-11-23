@@ -17,27 +17,43 @@ const COLORS: Record<InsightOutcomeKey, string> = {
   guestNoShow: 'var(--color-warning)',
 };
 
+export type OutcomeSlice = {
+  key: string;
+  label: string;
+  count: number;
+  color: string;
+};
+
 /** D3 computes exclusive slices; the renderer has no booking or aggregation policy. */
-export function EventOutcomesChart(props: { rows: InsightOutcomeRow[] }) {
+export function OutcomesChart(props: {
+  rows: OutcomeSlice[];
+  /** Under the total, e.g. "Total events". */
+  totalLabel: string;
+  /** Names the chart and its legend for assistive tech. */
+  label: string;
+  /** Shown under the legend when nothing is hovered. */
+  note: string;
+  empty: string;
+}) {
   const total = () => props.rows.reduce((sum, row) => sum + row.count, 0);
-  const [active, setActive] = createSignal<InsightOutcomeKey>();
+  const [active, setActive] = createSignal<string>();
   const [display, setDisplay] = createSignal<'count' | 'percent'>('count');
   const selected = () => props.rows.find((row) => row.key === active());
   const slices = createMemo(() =>
-    pie<InsightOutcomeRow>()
+    pie<OutcomeSlice>()
       .sort(null)
       .value((row) => row.count)(props.rows.filter((row) => row.count > 0))
   );
-  const path = arc<PieArcDatum<InsightOutcomeRow>>()
+  const path = arc<PieArcDatum<OutcomeSlice>>()
     .innerRadius(64)
     .outerRadius(94)
     .cornerRadius(3)
     .padAngle((slice) =>
       Math.min(0.025, (slice.endAngle - slice.startAngle) / 3)
     );
-  const percentage = (row: InsightOutcomeRow) =>
+  const percentage = (row: OutcomeSlice) =>
     `${total() ? Math.round((row.count / total()) * 100) : 0}%`;
-  const label = (row: InsightOutcomeRow) =>
+  const label = (row: OutcomeSlice) =>
     `${row.label}: ${row.count.toLocaleString()} (${percentage(row)})`;
   return (
     <div class="flex min-w-0 flex-col items-center gap-5 p-5 @xl/insight-main:flex-row">
@@ -46,7 +62,7 @@ export function EventOutcomesChart(props: { rows: InsightOutcomeRow[] }) {
           viewBox="-100 -100 200 200"
           class="size-full"
           role="group"
-          aria-label="Event outcomes donut chart"
+          aria-label={`${props.label} donut chart`}
           onPointerLeave={() => setActive(undefined)}
         >
           <Show
@@ -65,7 +81,7 @@ export function EventOutcomesChart(props: { rows: InsightOutcomeRow[] }) {
                 <path
                   data-outcome={slice.data.key}
                   d={path(slice) ?? ''}
-                  fill={COLORS[slice.data.key]}
+                  fill={slice.data.color}
                   class="outline-none focus-visible:stroke-ink focus-visible:stroke-2"
                   opacity={active() && active() !== slice.data.key ? 0.4 : 1}
                   tabIndex={0}
@@ -85,7 +101,7 @@ export function EventOutcomesChart(props: { rows: InsightOutcomeRow[] }) {
               {total().toLocaleString()}
             </tspan>
             <tspan x="0" y="22" class="fill-ink-muted text-xs">
-              Total events
+              {props.totalLabel}
             </tspan>
           </text>
         </svg>
@@ -116,7 +132,7 @@ export function EventOutcomesChart(props: { rows: InsightOutcomeRow[] }) {
           </ButtonGroup>
         </div>
         <ul
-          aria-label="Event outcomes"
+          aria-label={props.label}
           class="grid gap-x-5 gap-y-3 @xl/insight-main:grid-cols-2"
         >
           <For each={props.rows}>
@@ -124,7 +140,7 @@ export function EventOutcomesChart(props: { rows: InsightOutcomeRow[] }) {
               <li class="flex min-w-0 items-center gap-2 text-xs">
                 <span
                   class="size-2.5 shrink-0 rounded-full"
-                  style={{ background: COLORS[row.key] }}
+                  style={{ background: row.color }}
                 />
                 <span class="flex-1 text-ink-muted">{row.label}</span>
                 <span class="min-w-9 shrink-0 text-right font-medium tabular-nums">
@@ -137,13 +153,21 @@ export function EventOutcomesChart(props: { rows: InsightOutcomeRow[] }) {
           </For>
         </ul>
         <p role="status" class="mt-4 min-h-4 text-xs text-ink-muted">
-          {selected()
-            ? label(selected()!)
-            : total()
-              ? 'Each booking appears in one outcome.'
-              : 'No events in this period.'}
+          {selected() ? label(selected()!) : total() ? props.note : props.empty}
         </p>
       </div>
     </div>
+  );
+}
+
+export function EventOutcomesChart(props: { rows: InsightOutcomeRow[] }) {
+  return (
+    <OutcomesChart
+      rows={props.rows.map((row) => ({ ...row, color: COLORS[row.key] }))}
+      totalLabel="Total events"
+      label="Event outcomes"
+      note="Each booking appears in one outcome."
+      empty="No events in this period."
+    />
   );
 }
