@@ -494,6 +494,7 @@ pub async fn update_entity_access_channel_share_permissions(
             }
             EntityType::Database
             | EntityType::CrmPipeline
+            | EntityType::Campaign
             | EntityType::Form
             | EntityType::AgentSession
             | EntityType::Chat
@@ -617,6 +618,7 @@ pub async fn update_entity_access_channel_share_permissions(
             }
             EntityType::Database
             | EntityType::CrmPipeline
+            | EntityType::Campaign
             | EntityType::Form
             | EntityType::AgentSession
             | EntityType::Chat

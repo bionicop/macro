@@ -2006,6 +2006,95 @@ async fn run_server() -> anyhow::Result<()> {
             properties_service.clone(),
         ),
     ));
+    let campaign_service = Arc::new(campaign::domain::service::CampaignServiceImpl::new(
+        campaign::outbound::pg_campaign_repo::PgCampaignRepo::new(
+            db.clone(),
+            databases::outbound::pg_cell_store::PgCellStore::new(
+                db.clone(),
+                properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
+            ),
+        ),
+        databases_service.clone(),
+        entity_access_service.clone(),
+        crm::outbound::lookup::PgCampaignContacts::new(db.clone()),
+        macro_event_broker.clone(),
+    ));
+    let campaign_identities = Arc::new(campaign::domain::identities::IdentityServiceImpl::new(
+        campaign::outbound::pg_campaign_repo::PgCampaignRepo::new(
+            db.clone(),
+            databases::outbound::pg_cell_store::PgCellStore::new(
+                db.clone(),
+                properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
+            ),
+        ),
+        (!config.campaign_identity_kms_key_id.is_empty()).then(|| {
+            campaign::outbound::kms::KmsSecretCipher::new(
+                aws_sdk_kms::Client::new(&aws_config),
+                config.campaign_identity_kms_key_id.clone(),
+            )
+        }),
+        campaign::outbound::mail_outbox::MailOutbox::new(email::outbound::CampaignInbox::new(
+            Arc::new(email_service.clone()),
+        )),
+    ));
+    let campaign_links = campaign::domain::links::SignedLinks::new(
+        &config.campaign_public_base_url,
+        &config.campaign_link_secret,
+    );
+    let campaign_public_state = campaign::inbound::public_router::PublicRouterState {
+        repo: Arc::new(campaign::outbound::pg_campaign_repo::PgCampaignRepo::new(
+            db.clone(),
+            databases::outbound::pg_cell_store::PgCellStore::new(
+                db.clone(),
+                properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
+            ),
+        )),
+        links: campaign_links.clone(),
+        sendgrid_events: campaign::domain::sendgrid_events::EventKey::from_base64(
+            &config.campaign_sendgrid_event_key,
+        ),
+    };
+    if config.campaign_sender_enabled {
+        let links = campaign_links;
+        if links.is_none() {
+            tracing::warn!("campaign email will carry no unsubscribe link or open pixel");
+        }
+        let limits = campaign::domain::sender::SenderLimits::default();
+        let batch = limits.batch as usize;
+        let sender = campaign::domain::sender::CampaignSender::new(
+            campaign_service.clone(),
+            campaign_identities.clone(),
+            links,
+            limits,
+        );
+        tokio::spawn(async move {
+            tracing::info!("starting campaign sender");
+            const MAINTAIN_EVERY: std::time::Duration = std::time::Duration::from_secs(300);
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            let mut maintained: Option<std::time::Instant> = None;
+            loop {
+                tick.tick().await;
+                if maintained.is_none_or(|at| at.elapsed() >= MAINTAIN_EVERY) {
+                    if let Err(error) = sender.maintain().await {
+                        tracing::error!(error = ?error, "campaign maintenance failed");
+                    }
+                    maintained = Some(std::time::Instant::now());
+                }
+                // A full batch means more are due now.
+                loop {
+                    match sender.send_due(chrono::Utc::now()).await {
+                        Ok(sent) if sent >= batch => continue,
+                        Ok(_) => break,
+                        Err(error) => {
+                            tracing::error!(error = ?error, "campaign send pass failed");
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     let database_webhooks_service = Arc::new(database_webhooks::wiring::build_service(
         db.clone(),
@@ -2995,6 +3084,16 @@ async fn run_server() -> anyhow::Result<()> {
             transfer: crm_transfer,
             authorization: authorization_state.clone(),
         },
+        campaign_state: campaign::inbound::axum_router::CampaignRouterState {
+            service: campaign_service,
+            access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
+        campaign_identity_state: campaign::inbound::identity_router::IdentityRouterState {
+            service: campaign_identities,
+            authorization: authorization_state.clone(),
+        },
+        campaign_public_state,
         crm_state: crm::inbound::axum_router::CrmRouterState {
             service: Arc::new(crm_service),
             stage_service: Arc::new(crm::domain::stages::CrmStageServiceImpl::new(

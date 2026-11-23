@@ -12,6 +12,8 @@ use crate::domain::{
     ports::{
         AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
         EntityAccessService, EntityAudienceLookup, ScheduledActionGrants,
+        AccessRepository, AccessibleCampaigns, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
+        EntityAccessService, ScheduledActionGrants,
     },
 };
 use futures::{StreamExt, stream};
@@ -77,6 +79,7 @@ where
             }
             EntityType::Initiative => self.repo.get_initiative_access(entity_id, user_id).await,
             EntityType::CrmPipeline => self.repo.get_pipeline_access(entity_id, user_id).await,
+            EntityType::Campaign => self.repo.get_campaign_access(entity_id, user_id).await,
             EntityType::Database => self.repo.get_database_access(entity_id, user_id).await,
             EntityType::DatabaseRow => self.repo.get_database_row_access(entity_id, user_id).await,
             EntityType::Form => self.repo.get_form_access(entity_id, user_id).await,
@@ -226,6 +229,7 @@ where
             | EntityType::Call
             | EntityType::Initiative
             | EntityType::CrmPipeline
+            | EntityType::Campaign
             | EntityType::Database
             | EntityType::DatabaseRow
             | EntityType::ExternalChat
@@ -605,6 +609,7 @@ where
             | EntityType::AgentSession
             | EntityType::Initiative
             | EntityType::CrmPipeline
+            | EntityType::Campaign
             | EntityType::Database
             | EntityType::DatabaseRow
             | EntityType::ExternalChat
@@ -719,6 +724,7 @@ where
             | EntityType::CalendarEvent
             | EntityType::Initiative
             | EntityType::CrmPipeline
+            | EntityType::Campaign
             | EntityType::Database
             | EntityType::DatabaseRow
             | EntityType::ExternalChat
@@ -840,6 +846,7 @@ where
             | EntityType::CrmCompany
             | EntityType::CrmContact
             | EntityType::CrmPipeline
+            | EntityType::Campaign
             | EntityType::Database
             | EntityType::ExternalChat
             | EntityType::Form => {
@@ -941,6 +948,15 @@ fn session_permission_from_parent(level: AccessLevel) -> AccessLevel {
         AccessLevel::Edit
     } else {
         AccessLevel::View
+    }
+}
+
+impl<R: AccessRepository> AccessibleCampaigns for EntityAccessServiceImpl<R> {
+    async fn accessible_campaigns(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        self.repo.list_campaign_access(user_id).await
     }
 }
 

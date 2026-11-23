@@ -44,6 +44,7 @@ members = [
   "crates/broadcast",
   "crates/calendar_events",
   "crates/calendar_scheduling",
+  "crates/campaign",
   "crates/channel_bots",
   "crates/channel_labels",
   "crates/client/cache-bench",
@@ -349,6 +350,7 @@ heck = "0.5"
 hex = "0.4.3"
 hkdf = "0.12.4"
 hmac = "0.12.1"
+p256 = { version = "0.14", default-features = false, features = ["ecdsa", "pkcs8", "std"] }
 encoding_rs = "0.8"
 http = "1"
 http-body = "1.0.1"

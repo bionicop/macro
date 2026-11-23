@@ -152,6 +152,9 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
             EntityType::Harness => {
                 let id = parse_uuid(entity_id, "Invalid harness ID")?;
                 let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
+            EntityType::Campaign => {
+                let campaign_id = parse_uuid(entity_id, "Invalid campaign ID format")?;
+                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
                     .await
                     .map_err(anyhow_access_error)?;
                 Ok(queries::list_entity_access_grants(
@@ -159,6 +162,9 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                     &id,
                     EntityType::Harness,
                     &sources,
+                    &campaign_id,
+                    EntityType::Campaign,
+                    &source_ids,
                 )
                 .await?)
             }

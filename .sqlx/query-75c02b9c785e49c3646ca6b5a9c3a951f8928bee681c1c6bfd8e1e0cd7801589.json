@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_recipients SET state = 'failed', next_send_at = NULL, updated_at = now()\n                     WHERE campaign_id = $1 AND row_id = $2 AND state = 'active' AND next_position = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "75c02b9c785e49c3646ca6b5a9c3a951f8928bee681c1c6bfd8e1e0cd7801589"
+}

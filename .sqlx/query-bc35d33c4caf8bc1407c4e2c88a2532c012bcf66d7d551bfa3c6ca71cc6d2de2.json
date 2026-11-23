@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO campaign_senders (campaign_id, position, link_id, identity_id, daily_cap) VALUES ($1, $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2",
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bc35d33c4caf8bc1407c4e2c88a2532c012bcf66d7d551bfa3c6ca71cc6d2de2"
+}

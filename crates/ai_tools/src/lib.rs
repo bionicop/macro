@@ -85,7 +85,7 @@ pub use tool_context::{
     ToolFavoritesService, ToolFavoritesToolContext, ToolForeignEntityService, ToolFormsToolContext,
     ToolFrecencyService, ToolGithubPullRequestService, ToolImageGenerationToolContext,
     ToolImportService, ToolImportToolContext, ToolInitiativeToolContext,
-    ToolItemNotificationPreferenceToolContext, ToolMessageToolContext, ToolNotificationQueue,
+    ToolCampaignService, ToolCampaignToolContext, ToolItemNotificationPreferenceToolContext, ToolMessageToolContext, ToolNotificationQueue,
     ToolNotificationService, ToolNotificationToolContext, ToolPipelineService,
     ToolPipelineToolContext, ToolPipelineWorkflows, ToolProjectService, ToolProjectToolContext,
     ToolPropertiesService, ToolPropertiesToolContext, ToolReadAgentSessionContext,
@@ -97,7 +97,7 @@ pub use tool_context::{
     build_calendar_tool_context, build_channel_media_upload_tool_context,
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
     build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
-    build_crm_tool_context, build_crm_transfer_tool_context, build_databases_sql_tool_context,
+    build_campaign_tool_context, build_crm_tool_context, build_crm_transfer_tool_context, build_databases_sql_tool_context,
     build_databases_tool_context, build_favorites_service, build_favorites_tool_context,
     build_forms_tool_context, build_image_generation_tool_context, build_import_repo,
     build_initiative_tool_context, build_item_notification_preference_tool_context,
@@ -182,6 +182,7 @@ pub(crate) fn base_toolset() -> AiToolSet {
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
         .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
         .add_subtoolset::<ToolPipelineToolContext>(pipeline_toolset())
+        .add_subtoolset::<ToolCampaignToolContext>(campaign::inbound::toolset::campaign_toolset())
         .add_subtoolset::<ToolCrmTransferToolContext>(
             crm::inbound::toolset::transfer::crm_transfer_toolset(),
         )

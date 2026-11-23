@@ -105,6 +105,8 @@ pub fn build_memory_service(
                 | "ReadChannelMessages"
                 | "ReadChannelThread"
                 | "ReadChannelMessageContext"
+                | "ListCampaigns"
+                | "GetCampaign"
         )
     });
     toolset.user_tools.clear();

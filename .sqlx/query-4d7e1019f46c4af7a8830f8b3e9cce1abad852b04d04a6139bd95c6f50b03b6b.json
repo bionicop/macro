@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET CONSTRAINTS campaign_steps_position DEFERRED",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "4d7e1019f46c4af7a8830f8b3e9cce1abad852b04d04a6139bd95c6f50b03b6b"
+}

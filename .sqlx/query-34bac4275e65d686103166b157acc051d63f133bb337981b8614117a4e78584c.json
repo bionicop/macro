@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT st.id AS \"step_id!\",\n                      count(se.id) FILTER (WHERE se.status = 'sent') AS \"sent!\",\n                      count(se.opened_at) AS \"opened!\",\n                      count(se.replied_at) AS \"replied!\",\n                      count(se.bounced_at) AS \"bounced!\"\n               FROM campaign_steps st\n               LEFT JOIN campaign_sends se ON se.step_id = st.id\n               WHERE st.campaign_id = $1\n               GROUP BY st.id, st.position ORDER BY st.position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "step_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sent!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "opened!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "replied!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "bounced!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "34bac4275e65d686103166b157acc051d63f133bb337981b8614117a4e78584c"
+}

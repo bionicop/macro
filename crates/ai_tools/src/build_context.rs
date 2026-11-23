@@ -609,6 +609,11 @@ pub async fn build_tool_service_context_from_env(
         &crm_tool_context,
         &document_tool_context,
     );
+    let campaign_tool_context = crate::tool_context::build_campaign_tool_context(
+        pool.clone(),
+        &databases_tool_context,
+        crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
 
     let forms_tool_context = crate::tool_context::build_forms_tool_context(
         pool.clone(),
@@ -758,6 +763,7 @@ pub async fn build_tool_service_context_from_env(
         crm_tool_context,
         pipeline_tool_context,
         crm_transfer_tool_context,
+        campaign_tool_context,
         skill_tool_context,
         schedule_tool_context: crate::build_routine_tool_context()?,
         web_search_provider: build_web_search_provider_from_env(),

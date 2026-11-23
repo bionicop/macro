@@ -106,4 +106,6 @@ topics! {
     MacroPasswordsTopic => "macro.passwords",
     /// Time logged on tasks: entries logged, edited and deleted, with the task's new total.
     MacroTimeEntriesTopic => "macro.time_entries",
+    /// Campaign lifecycle (created, renamed, trashed, restored, launched, paused) events.
+    MacroCampaignsTopic => "macro.campaigns",
 }

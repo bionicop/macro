@@ -100,6 +100,8 @@ pub enum GraphqlEntityType {
     /// Independently shared external chat.
     #[graphql(name = "EXTERNAL_CHAT")]
     ExternalChat,
+    /// Outreach campaign entity.
+    Campaign,
     /// Schema-only stub for clients released with this value before external
     /// chats replaced WhatsApp groups. Never returned; rejected as input.
     #[graphql(
@@ -138,6 +140,7 @@ impl GraphqlSoupEntityType {
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::ExternalChat
+            | EntityType::Campaign
             | EntityType::Form => return None,
         })
     }
@@ -200,6 +203,7 @@ impl GraphqlEntityType {
             EntityType::Form => Self::Form,
             EntityType::ExternalChat => Self::ExternalChat,
             EntityType::Harness => Self::Harness,
+            EntityType::Campaign => Self::Campaign,
         }
     }
 
@@ -232,6 +236,7 @@ impl GraphqlEntityType {
             Self::Form => EntityType::Form,
             Self::ExternalChat => EntityType::ExternalChat,
             Self::Harness => EntityType::Harness,
+            Self::Campaign => EntityType::Campaign,
             Self::WhatsappGroup => {
                 return Err(async_graphql::Error::new(
                     "WHATSAPP_GROUP is no longer an entity type; use EXTERNAL_CHAT",

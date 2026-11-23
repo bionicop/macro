@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_steps SET position = $2, delay_minutes = $3, subject = $4, body_html = $5, body_text = $6, body_macro = $7, send_condition = $8, updated_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "83811dd4bab197f369294e89c26269ce038fb2f73a420f7e8351208631a5bf54"
+}

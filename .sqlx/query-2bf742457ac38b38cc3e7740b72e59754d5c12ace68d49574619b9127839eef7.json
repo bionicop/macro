@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE campaign_entities SET name = $2, updated_at = now() WHERE id = $1 AND trashed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2bf742457ac38b38cc3e7740b72e59754d5c12ace68d49574619b9127839eef7"
+}

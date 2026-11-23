@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"enrolled!\",\n                      count(*) FILTER (WHERE state = 'active') AS \"active!\",\n                      count(*) FILTER (WHERE state = 'completed') AS \"completed!\",\n                      count(*) FILTER (WHERE state = 'replied') AS \"replied!\",\n                      count(*) FILTER (WHERE state = 'bounced') AS \"bounced!\",\n                      count(*) FILTER (WHERE state = 'unsubscribed') AS \"unsubscribed!\",\n                      count(*) FILTER (WHERE state = 'failed') AS \"failed!\"\n               FROM campaign_recipients WHERE campaign_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "enrolled!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "active!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "completed!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "replied!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "bounced!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "unsubscribed!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "failed!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0cd422602d20892029709e491ff8b60955d5d8969e60e0e1c8e9519ee3e3a9ce"
+}

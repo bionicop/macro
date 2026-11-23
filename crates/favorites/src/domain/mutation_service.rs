@@ -101,7 +101,8 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::ExternalChat
         | EntityType::AgentSession
         | EntityType::Database
-        | EntityType::Form => Ok(()),
+        | EntityType::Form
+        | EntityType::Campaign => Ok(()),
         EntityType::User
         | EntityType::Team
         | EntityType::ChannelMessage

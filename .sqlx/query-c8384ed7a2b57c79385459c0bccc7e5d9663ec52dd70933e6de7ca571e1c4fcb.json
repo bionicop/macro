@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH send AS (\n                   SELECT s.campaign_id, s.row_id, lower(s.recipient_email) AS email, c.team_id\n                   FROM campaign_sends s JOIN campaign_entities c ON c.id = s.campaign_id\n                   WHERE s.id = $1\n               ), stopped AS (\n                   UPDATE campaign_recipients r SET state = 'unsubscribed', next_send_at = NULL, updated_at = now()\n                   FROM send WHERE r.campaign_id = send.campaign_id AND r.row_id = send.row_id\n                     AND r.state IN ('active', 'completed', 'replied')\n                   RETURNING 1\n               ), suppressed AS (\n                   INSERT INTO campaign_suppressions (team_id, email, reason, campaign_id)\n                   SELECT team_id, email, 'unsubscribed', campaign_id FROM send\n                   ON CONFLICT DO NOTHING\n                   RETURNING 1\n               )\n               SELECT EXISTS (SELECT 1 FROM send) AS \"found!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "found!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c8384ed7a2b57c79385459c0bccc7e5d9663ec52dd70933e6de7ca571e1c4fcb"
+}

@@ -30,6 +30,7 @@ pub mod channel_role;
 pub mod channel_users;
 pub mod chat_access;
 pub mod crm_batch_access;
+pub mod campaign_access;
 pub mod crm_company_access;
 pub mod crm_contact_access;
 pub mod crm_entity_users;
